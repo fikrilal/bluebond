@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -13,4 +15,11 @@ pub struct Cli {
 pub enum Command {
     /// Check host tools and paths needed by BlueBond.
     Doctor,
+
+    /// Read Linux BlueZ adapters and devices without making changes.
+    Scan {
+        /// Override the BlueZ store directory.
+        #[arg(long, value_name = "PATH")]
+        bluez_dir: Option<PathBuf>,
+    },
 }

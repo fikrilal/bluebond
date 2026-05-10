@@ -1,0 +1,22 @@
+[General]
+Name=Legion M600 Mouse
+Alias=Legion M600 Mouse
+AddressType=static
+SupportedTechnologies=LE;
+Trusted=true
+Blocked=false
+Services=00001800-0000-1000-8000-00805f9b34fb;
+Paired=true
+WakeAllowed=true
+
+[LinkKey]
+Key=00112233445566778899AABBCCDDEEFF
+Type=4
+PINLength=0
+
+[LongTermKey]
+Key=FFEEDDCCBBAA99887766554433221100
+Authenticated=0
+EncSize=16
+EDiv=0
+Rand=0

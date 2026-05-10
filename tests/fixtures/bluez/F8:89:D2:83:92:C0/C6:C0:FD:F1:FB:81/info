@@ -1,0 +1,8 @@
+[General]
+Name=Malformed Bool Device
+AddressType=public
+Trusted=yes
+Paired=1
+
+[LinkKey]
+Key=00112233445566778899AABBCCDDEEFF

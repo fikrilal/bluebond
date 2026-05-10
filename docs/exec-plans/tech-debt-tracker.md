@@ -4,7 +4,6 @@ Track known follow-up work that should not be forgotten.
 
 ## Harness
 
-- Add Rust-aware architecture checks once `src/` exists.
 - Add docs link validation once documentation grows.
 - Add fixture redaction checks before committing real Bluetooth key examples.
 
@@ -12,6 +11,7 @@ Track known follow-up work that should not be forgotten.
 
 - Create anonymized fixtures from the Legion M600 case.
 - Document Windows Fast Startup and BitLocker limitations.
+- Decide whether unprivileged `scan` should use D-Bus/bluetoothctl for public inventory and reserve raw BlueZ key inspection for privileged `plan` or `apply`.
 
 ## Engineering
 

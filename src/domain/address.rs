@@ -9,6 +9,27 @@ pub struct BluetoothAddress {
 }
 
 impl BluetoothAddress {
+    pub fn from_compact_hex(input: &str) -> Result<Self> {
+        let normalized = input.trim();
+        if normalized.len() != 12 {
+            return Err(BluebondError::InvalidBluetoothAddress {
+                input: input.to_string(),
+            });
+        }
+
+        let mut bytes = [0_u8; 6];
+        for (index, chunk_start) in (0..12).step_by(2).enumerate() {
+            let chunk = &normalized[chunk_start..chunk_start + 2];
+            bytes[index] = u8::from_str_radix(chunk, 16).map_err(|_| {
+                BluebondError::InvalidBluetoothAddress {
+                    input: input.to_string(),
+                }
+            })?;
+        }
+
+        Ok(Self { bytes })
+    }
+
     pub fn bytes(self) -> [u8; 6] {
         self.bytes
     }
@@ -88,5 +109,12 @@ mod tests {
         let result = "f8:89:d2".parse::<BluetoothAddress>();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parses_compact_hex_address() {
+        let address = BluetoothAddress::from_compact_hex("f889d28392c0").unwrap();
+
+        assert_eq!(address.to_string(), "F8:89:D2:83:92:C0");
     }
 }

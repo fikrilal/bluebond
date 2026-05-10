@@ -3,8 +3,12 @@ use std::path::{Path, PathBuf};
 use crate::domain::BluetoothAdapter;
 use crate::error::Result;
 use crate::infra::bluez::store;
+use crate::infra::windows::bthport;
 use crate::infra::windows::system_hive;
 
+pub use crate::infra::windows::bthport::{
+    WindowsBluetoothAdapterKey, WindowsBluetoothKeyInspection, WindowsBluetoothKeyInspectionStatus,
+};
 pub use crate::infra::windows::system_hive::{WindowsSystemHiveCandidate, WindowsSystemHiveStatus};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -18,6 +22,7 @@ pub struct ScanReport {
     pub bluez_dir: PathBuf,
     pub adapters: Vec<BluetoothAdapter>,
     pub windows_candidates: Vec<WindowsSystemHiveCandidate>,
+    pub windows_bluetooth_keys: Vec<WindowsBluetoothKeyInspection>,
 }
 
 impl ScanRequest {
@@ -40,11 +45,17 @@ pub fn run(request: &ScanRequest) -> Result<ScanReport> {
         Some(root) => vec![system_hive::validate_root(root)],
         None => system_hive::discover_candidates(),
     };
+    let windows_bluetooth_keys = windows_candidates
+        .iter()
+        .filter(|candidate| matches!(candidate.status, WindowsSystemHiveStatus::Ready))
+        .map(|candidate| bthport::inspect_adapter_keys(&candidate.hive_path))
+        .collect();
 
     Ok(ScanReport {
         bluez_dir: request.bluez_dir.clone(),
         adapters,
         windows_candidates,
+        windows_bluetooth_keys,
     })
 }
 

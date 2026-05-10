@@ -1,5 +1,5 @@
 use crate::app::doctor::DoctorReport;
-use crate::app::scan::{ScanReport, WindowsSystemHiveStatus};
+use crate::app::scan::{ScanReport, WindowsBluetoothKeyInspectionStatus, WindowsSystemHiveStatus};
 
 pub fn print_doctor_report(report: &DoctorReport) {
     println!("BlueBond doctor\n");
@@ -15,6 +15,8 @@ pub fn print_scan_report(report: &ScanReport) {
     println!("BlueZ store: {}", report.bluez_dir.display());
     println!();
     print_windows_candidates(report);
+    println!();
+    print_windows_bluetooth_keys(report);
     println!();
 
     if report.adapters.is_empty() {
@@ -47,6 +49,32 @@ pub fn print_scan_report(report: &ScanReport) {
                 device.address_type.as_deref().unwrap_or("unknown"),
                 format_key_summary(device.has_link_key, device.has_long_term_key)
             );
+        }
+    }
+}
+
+fn print_windows_bluetooth_keys(report: &ScanReport) {
+    println!("Windows Bluetooth keys:");
+
+    if report.windows_bluetooth_keys.is_empty() {
+        println!("  not inspected");
+        return;
+    }
+
+    for inspection in &report.windows_bluetooth_keys {
+        println!(
+            "  hive: {} ({})",
+            inspection.hive_path.display(),
+            format_windows_bluetooth_key_status(&inspection.status)
+        );
+
+        if inspection.adapters.is_empty() {
+            continue;
+        }
+
+        for (index, adapter) in inspection.adapters.iter().enumerate() {
+            println!("      [{}] {}", index + 1, adapter.adapter_address);
+            println!("          source: {}", adapter.registry_path);
         }
     }
 }
@@ -101,5 +129,16 @@ fn format_windows_status(status: &WindowsSystemHiveStatus) -> &'static str {
         WindowsSystemHiveStatus::Missing => "missing SYSTEM hive",
         WindowsSystemHiveStatus::NotFile => "SYSTEM hive path is not a file",
         WindowsSystemHiveStatus::Unreadable => "SYSTEM hive is not readable",
+    }
+}
+
+fn format_windows_bluetooth_key_status(
+    status: &WindowsBluetoothKeyInspectionStatus,
+) -> &'static str {
+    match status {
+        WindowsBluetoothKeyInspectionStatus::Ready => "ready",
+        WindowsBluetoothKeyInspectionStatus::MissingTool => "hivexsh missing",
+        WindowsBluetoothKeyInspectionStatus::NoKeysFound => "no adapter keys found",
+        WindowsBluetoothKeyInspectionStatus::CommandFailed => "registry inspection failed",
     }
 }

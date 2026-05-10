@@ -1,5 +1,6 @@
 use crate::domain::{
-    BluetoothAddress, DiscoveredBondState, KeyMaterialPresence, LinuxBondDevice, WindowsBondDevice,
+    BluetoothAddress, DiscoveredBondState, KeyMaterialPresence, LinuxBondDevice,
+    WindowsBondAdapter, WindowsBondDevice,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -29,7 +30,11 @@ impl BondMatchReport {
                                     .iter()
                                     .find(|device| device.address == linux_device.address);
 
-                                DeviceMatch::from_exact_match(linux_device, windows_device)
+                                DeviceMatch::from_windows_adapter(
+                                    linux_device,
+                                    windows_adapter,
+                                    windows_device,
+                                )
                             })
                             .collect();
 
@@ -78,26 +83,85 @@ pub struct DeviceMatch {
     pub windows_address: Option<BluetoothAddress>,
     pub display_name: String,
     pub status: DeviceMatchStatus,
+    pub drift_candidates: Vec<DeviceDriftCandidate>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DeviceDriftCandidate {
+    pub windows_address: BluetoothAddress,
+    pub differing_bytes: u8,
+    pub key_material: KeyMaterialPresence,
 }
 
 impl DeviceMatch {
-    fn from_exact_match(
+    fn from_windows_adapter(
         linux_device: &LinuxBondDevice,
+        windows_adapter: &WindowsBondAdapter,
         windows_device: Option<&WindowsBondDevice>,
     ) -> Self {
-        let status = match windows_device {
-            Some(device) if device.key_material == KeyMaterialPresence::Present => {
-                DeviceMatchStatus::ExactUsable
-            }
-            Some(_) => DeviceMatchStatus::ExactMissingWindowsKeyMaterial,
-            None => DeviceMatchStatus::MissingWindowsDevice,
+        match windows_device {
+            Some(device) => Self::from_exact_match(linux_device, device),
+            None => Self::from_drift_candidates(linux_device, windows_adapter),
+        }
+    }
+
+    fn from_exact_match(
+        linux_device: &LinuxBondDevice,
+        windows_device: &WindowsBondDevice,
+    ) -> Self {
+        let status = if windows_device.key_material == KeyMaterialPresence::Present {
+            DeviceMatchStatus::ExactUsable
+        } else {
+            DeviceMatchStatus::ExactMissingWindowsKeyMaterial
         };
 
         Self {
             linux_address: linux_device.address,
-            windows_address: windows_device.map(|device| device.address),
+            windows_address: Some(windows_device.address),
             display_name: linux_device.display_name.clone(),
             status,
+            drift_candidates: Vec::new(),
+        }
+    }
+
+    fn from_drift_candidates(
+        linux_device: &LinuxBondDevice,
+        windows_adapter: &WindowsBondAdapter,
+    ) -> Self {
+        let drift_candidates = windows_adapter
+            .devices
+            .iter()
+            .filter_map(|device| {
+                let differing_bytes = differing_byte_count(linux_device.address, device.address);
+
+                if differing_bytes == 1 && device.key_material == KeyMaterialPresence::Present {
+                    Some(DeviceDriftCandidate {
+                        windows_address: device.address,
+                        differing_bytes,
+                        key_material: device.key_material,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let status = match drift_candidates.len() {
+            0 => DeviceMatchStatus::MissingWindowsDevice,
+            1 => DeviceMatchStatus::AddressDriftCandidate,
+            _ => DeviceMatchStatus::AmbiguousAddressDrift,
+        };
+
+        Self {
+            linux_address: linux_device.address,
+            windows_address: if drift_candidates.len() == 1 {
+                Some(drift_candidates[0].windows_address)
+            } else {
+                None
+            },
+            display_name: linux_device.display_name.clone(),
+            status,
+            drift_candidates,
         }
     }
 
@@ -107,6 +171,7 @@ impl DeviceMatch {
             windows_address: None,
             display_name: linux_device.display_name.clone(),
             status: DeviceMatchStatus::MissingWindowsAdapter,
+            drift_candidates: Vec::new(),
         }
     }
 }
@@ -115,6 +180,16 @@ impl DeviceMatch {
 pub enum DeviceMatchStatus {
     ExactUsable,
     ExactMissingWindowsKeyMaterial,
+    AddressDriftCandidate,
+    AmbiguousAddressDrift,
     MissingWindowsDevice,
     MissingWindowsAdapter,
+}
+
+fn differing_byte_count(left: BluetoothAddress, right: BluetoothAddress) -> u8 {
+    left.bytes()
+        .into_iter()
+        .zip(right.bytes())
+        .filter(|(left, right)| left != right)
+        .count() as u8
 }

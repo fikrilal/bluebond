@@ -25,6 +25,14 @@ pub struct WindowsBluetoothAdapterKey {
     pub control_set: String,
     pub registry_path: String,
     pub adapter_address: BluetoothAddress,
+    pub devices: Vec<WindowsBluetoothDeviceKey>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WindowsBluetoothDeviceKey {
+    pub registry_path: String,
+    pub device_address: BluetoothAddress,
+    pub has_key_material: bool,
 }
 
 pub fn inspect_adapter_keys(hive_path: &Path) -> WindowsBluetoothKeyInspection {
@@ -47,11 +55,15 @@ pub fn inspect_adapter_keys(hive_path: &Path) -> WindowsBluetoothKeyInspection {
 
         match command::run_with_stdin("hivexsh", &[hive.as_ref()], &script) {
             Ok(output) => {
-                adapters.extend(parse_adapter_key_listing(
-                    &control_set,
-                    &registry_path,
-                    &output.stdout,
-                ));
+                let mut parsed_adapters =
+                    parse_adapter_key_listing(&control_set, &registry_path, &output.stdout);
+
+                for adapter in &mut parsed_adapters {
+                    adapter.devices =
+                        inspect_device_keys_for_adapter(hive_path, &adapter.registry_path);
+                }
+
+                adapters.extend(parsed_adapters);
             }
             Err(_) => {
                 saw_command_failure = true;
@@ -95,16 +107,84 @@ fn parse_adapter_key_line(
     line: &str,
 ) -> Option<WindowsBluetoothAdapterKey> {
     let key_name = line.trim();
-
-    if key_name.len() != 12 || !key_name.chars().all(|value| value.is_ascii_hexdigit()) {
-        return None;
-    }
-
-    let adapter_address = BluetoothAddress::from_compact_hex(key_name).ok()?;
+    let adapter_address = parse_compact_registry_address(key_name)?;
 
     Some(WindowsBluetoothAdapterKey {
         control_set: control_set.to_string(),
         registry_path: format!(r"{registry_path}\{}", key_name.to_ascii_lowercase()),
         adapter_address,
+        devices: Vec::new(),
     })
+}
+
+fn inspect_device_keys_for_adapter(
+    hive_path: &Path,
+    adapter_registry_path: &str,
+) -> Vec<WindowsBluetoothDeviceKey> {
+    let script = format!("cd \\{adapter_registry_path}\nls\nquit\n");
+    let hive = hive_path.to_string_lossy();
+
+    let Ok(output) = command::run_with_stdin("hivexsh", &[hive.as_ref()], &script) else {
+        return Vec::new();
+    };
+
+    let mut devices = parse_device_key_listing(adapter_registry_path, &output.stdout);
+
+    for device in &mut devices {
+        let script = format!("cd \\{}\nlsval\nquit\n", device.registry_path);
+        let Ok(output) = command::run_with_stdin("hivexsh", &[hive.as_ref()], &script) else {
+            continue;
+        };
+
+        device.has_key_material = parse_key_material_presence(&output.stdout);
+    }
+
+    devices
+}
+
+pub fn parse_device_key_listing(
+    adapter_registry_path: &str,
+    output: &str,
+) -> Vec<WindowsBluetoothDeviceKey> {
+    let mut devices = output
+        .lines()
+        .filter_map(|line| parse_device_key_line(adapter_registry_path, line))
+        .collect::<Vec<_>>();
+
+    devices.sort_by_key(|device| device.device_address);
+    devices.dedup_by_key(|device| device.device_address);
+    devices
+}
+
+pub fn parse_key_material_presence(output: &str) -> bool {
+    output.lines().any(|line| {
+        let trimmed = line.trim();
+
+        trimmed.starts_with("\"LTK\"=")
+            || trimmed.starts_with("\"Key\"=")
+            || trimmed.starts_with("\"IRK\"=")
+            || trimmed.starts_with("\"CSRK\"=")
+    })
+}
+
+fn parse_device_key_line(
+    adapter_registry_path: &str,
+    line: &str,
+) -> Option<WindowsBluetoothDeviceKey> {
+    let key_name = line.trim();
+    let device_address = parse_compact_registry_address(key_name)?;
+
+    Some(WindowsBluetoothDeviceKey {
+        registry_path: format!(r"{adapter_registry_path}\{}", key_name.to_ascii_lowercase()),
+        device_address,
+        has_key_material: false,
+    })
+}
+
+fn parse_compact_registry_address(key_name: &str) -> Option<BluetoothAddress> {
+    if key_name.len() != 12 || !key_name.chars().all(|value| value.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    BluetoothAddress::from_compact_hex(key_name).ok()
 }

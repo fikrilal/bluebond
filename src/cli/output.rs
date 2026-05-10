@@ -75,6 +75,22 @@ fn print_windows_bluetooth_keys(report: &ScanReport) {
         for (index, adapter) in inspection.adapters.iter().enumerate() {
             println!("      [{}] {}", index + 1, adapter.adapter_address);
             println!("          source: {}", adapter.registry_path);
+
+            if adapter.devices.is_empty() {
+                println!("          devices: not found");
+                continue;
+            }
+
+            println!("          devices:");
+            for (device_index, device) in adapter.devices.iter().enumerate() {
+                println!(
+                    "            [{}] {}  key material: {}",
+                    device_index + 1,
+                    device.device_address,
+                    format_bool_present(device.has_key_material)
+                );
+                println!("                source: {}", device.registry_path);
+            }
         }
     }
 }
@@ -120,6 +136,14 @@ fn format_key_summary(has_link_key: bool, has_long_term_key: bool) -> &'static s
         (true, false) => "link",
         (false, true) => "ltk",
         (false, false) => "not present",
+    }
+}
+
+fn format_bool_present(value: bool) -> &'static str {
+    if value {
+        "present"
+    } else {
+        "not present"
     }
 }
 

@@ -21,5 +21,9 @@ pub enum Command {
         /// Override the BlueZ store directory.
         #[arg(long, value_name = "PATH")]
         bluez_dir: Option<PathBuf>,
+
+        /// Override the offline Windows root directory.
+        #[arg(long, value_name = "PATH")]
+        windows_root: Option<PathBuf>,
     },
 }

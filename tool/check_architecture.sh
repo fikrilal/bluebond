@@ -40,6 +40,11 @@ check_forbidden \
   "src/infra" \
   'crate::cli|super::super::cli'
 
+check_forbidden \
+  "infra must not import app" \
+  "src/infra" \
+  'crate::app|super::super::app'
+
 if rg -n 'std::process::Command|process::Command' src --glob '*.rs' \
   --glob '!src/infra/command.rs' \
   --glob '!src/infra/command/*.rs'

@@ -1,5 +1,5 @@
 use crate::app::doctor::DoctorReport;
-use crate::app::scan::ScanReport;
+use crate::app::scan::{ScanReport, WindowsSystemHiveStatus};
 
 pub fn print_doctor_report(report: &DoctorReport) {
     println!("BlueBond doctor\n");
@@ -13,6 +13,8 @@ pub fn print_doctor_report(report: &DoctorReport) {
 pub fn print_scan_report(report: &ScanReport) {
     println!("BlueBond scan\n");
     println!("BlueZ store: {}", report.bluez_dir.display());
+    println!();
+    print_windows_candidates(report);
     println!();
 
     if report.adapters.is_empty() {
@@ -49,6 +51,25 @@ pub fn print_scan_report(report: &ScanReport) {
     }
 }
 
+fn print_windows_candidates(report: &ScanReport) {
+    println!("Windows installations:");
+
+    if report.windows_candidates.is_empty() {
+        println!("  none detected");
+        return;
+    }
+
+    for (index, candidate) in report.windows_candidates.iter().enumerate() {
+        println!(
+            "  [{}] {}",
+            index + 1,
+            format_windows_status(&candidate.status)
+        );
+        println!("      root: {}", candidate.root.display());
+        println!("      hive: {}", candidate.hive_path.display());
+    }
+}
+
 fn plural(count: usize) -> &'static str {
     if count == 1 {
         ""
@@ -71,5 +92,14 @@ fn format_key_summary(has_link_key: bool, has_long_term_key: bool) -> &'static s
         (true, false) => "link",
         (false, true) => "ltk",
         (false, false) => "not present",
+    }
+}
+
+fn format_windows_status(status: &WindowsSystemHiveStatus) -> &'static str {
+    match status {
+        WindowsSystemHiveStatus::Ready => "ready",
+        WindowsSystemHiveStatus::Missing => "missing SYSTEM hive",
+        WindowsSystemHiveStatus::NotFile => "SYSTEM hive path is not a file",
+        WindowsSystemHiveStatus::Unreadable => "SYSTEM hive is not readable",
     }
 }

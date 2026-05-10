@@ -4,7 +4,6 @@ use std::path::Path;
 
 use crate::domain::{BluetoothAdapter, BluetoothAddress, BluetoothDevice};
 use crate::error::{BluebondError, Result};
-use tracing::debug;
 
 pub const DEFAULT_BLUEZ_DIR: &str = "/var/lib/bluetooth";
 
@@ -35,10 +34,6 @@ pub fn read_inventory(bluez_dir: &Path) -> Result<Vec<BluetoothAdapter>> {
         }
 
         let Some(adapter_address) = parse_dir_address(&entry.file_name()) else {
-            debug!(
-                path = %entry.path().display(),
-                "skipping non-address BlueZ store entry"
-            );
             continue;
         };
 
@@ -76,19 +71,11 @@ fn read_adapter_devices(adapter_dir: &Path) -> Result<Vec<BluetoothDevice>> {
         }
 
         let Some(device_address) = parse_dir_address(&entry.file_name()) else {
-            debug!(
-                path = %entry.path().display(),
-                "skipping non-address BlueZ adapter entry"
-            );
             continue;
         };
 
         let info_path = entry.path().join("info");
         if !info_path.is_file() {
-            debug!(
-                path = %entry.path().display(),
-                "skipping BlueZ device directory without info file"
-            );
             continue;
         }
 

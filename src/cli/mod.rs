@@ -22,10 +22,18 @@ pub fn run() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
-        Command::Scan { bluez_dir } => {
+        Command::Scan {
+            bluez_dir,
+            windows_root,
+        } => {
             let request = match bluez_dir {
                 Some(bluez_dir) => app::scan::ScanRequest::new(bluez_dir),
                 None => app::scan::default_request(),
+            };
+
+            let request = match windows_root {
+                Some(windows_root) => request.with_windows_root(windows_root),
+                None => request,
             };
 
             match app::scan::run(&request) {

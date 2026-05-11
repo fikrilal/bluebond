@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use bluebond::app::scan::{self, ScanRequest};
-use bluebond::infra::bluez::store;
+use bluebond::error::BluebondError;
+use bluebond::infra::{bluez::store, linux::privileges};
 
 #[test]
 fn reads_bluez_adapters_and_device_info() {
@@ -46,4 +47,47 @@ fn missing_bluez_store_returns_error() {
     let result = store::read_inventory(Path::new("tests/fixtures/bluez-missing"));
 
     assert!(result.is_err());
+}
+
+#[test]
+fn reports_readable_bluez_store_readiness() {
+    let readiness = store::store_readiness(Path::new("tests/fixtures/bluez"));
+
+    assert_eq!(readiness, store::StoreReadiness::Readable);
+    assert!(readiness.is_readable());
+}
+
+#[test]
+fn reports_missing_bluez_store_readiness() {
+    let readiness = store::store_readiness(Path::new("tests/fixtures/bluez-missing"));
+
+    assert_eq!(readiness, store::StoreReadiness::Missing);
+    assert!(!readiness.is_readable());
+}
+
+#[cfg(unix)]
+#[test]
+fn permission_denied_bluez_store_returns_actionable_error() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let bluez_dir = temp.path().join("bluez");
+    fs::create_dir(&bluez_dir).unwrap();
+    fs::set_permissions(&bluez_dir, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let readiness = store::store_readiness(&bluez_dir);
+    let result = store::read_inventory(&bluez_dir);
+
+    fs::set_permissions(&bluez_dir, fs::Permissions::from_mode(0o700)).unwrap();
+
+    if privileges::running_as_root() {
+        return;
+    }
+
+    assert_eq!(readiness, store::StoreReadiness::PermissionDenied);
+    assert!(matches!(
+        result,
+        Err(BluebondError::BluezStoreNotReadable { path }) if path == bluez_dir
+    ));
 }

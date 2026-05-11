@@ -13,10 +13,55 @@ pub fn default_store_exists() -> bool {
     Path::new(DEFAULT_BLUEZ_DIR).exists()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreReadiness {
+    Readable,
+    Missing,
+    NotDirectory,
+    PermissionDenied,
+    Unreadable,
+}
+
+impl StoreReadiness {
+    pub fn is_readable(self) -> bool {
+        self == Self::Readable
+    }
+}
+
+pub fn default_store_readiness() -> StoreReadiness {
+    store_readiness(Path::new(DEFAULT_BLUEZ_DIR))
+}
+
+pub fn store_readiness(bluez_dir: &Path) -> StoreReadiness {
+    if !bluez_dir.exists() {
+        return StoreReadiness::Missing;
+    }
+
+    if !bluez_dir.is_dir() {
+        return StoreReadiness::NotDirectory;
+    }
+
+    match fs::read_dir(bluez_dir) {
+        Ok(_) => StoreReadiness::Readable,
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            StoreReadiness::PermissionDenied
+        }
+        Err(_) => StoreReadiness::Unreadable,
+    }
+}
+
 pub fn read_inventory(bluez_dir: &Path) -> Result<Vec<BluetoothAdapter>> {
-    let entries = fs::read_dir(bluez_dir).map_err(|source| BluebondError::Io {
-        context: "reading BlueZ store directory",
-        source,
+    let entries = fs::read_dir(bluez_dir).map_err(|source| {
+        if source.kind() == std::io::ErrorKind::PermissionDenied {
+            BluebondError::BluezStoreNotReadable {
+                path: bluez_dir.to_path_buf(),
+            }
+        } else {
+            BluebondError::Io {
+                context: "reading BlueZ store directory",
+                source,
+            }
+        }
     })?;
 
     let mut adapters = Vec::new();

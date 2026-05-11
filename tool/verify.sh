@@ -31,6 +31,9 @@ done
 step "Verify architecture guardrails"
 ./tool/check_architecture.sh
 
+step "Verify fixture safety"
+./tool/check_fixtures.sh
+
 if [[ -f Cargo.toml ]]; then
   step "Cargo fmt"
   cargo fmt --check

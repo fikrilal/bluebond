@@ -29,7 +29,7 @@ fn maps_scan_report_into_discovered_bond_state() {
         }],
         windows_candidates: Vec::new(),
         windows_bluetooth_keys: vec![WindowsBluetoothKeyInspection {
-            hive_path: PathBuf::from("/mnt/windows/Windows/System32/config/SYSTEM"),
+            hive_path: PathBuf::from("tests/fixtures/windows/Windows/System32/config/SYSTEM"),
             status: WindowsBluetoothKeyInspectionStatus::Ready,
             adapters: vec![WindowsBluetoothAdapterKey {
                 control_set: "ControlSet001".to_string(),

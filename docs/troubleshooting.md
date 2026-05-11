@@ -107,6 +107,30 @@ sudo bluebond rollback restore --metadata /var/lib/bluebond/backups/<snapshot>/b
 
 Keep dry-run commands unprivileged when possible.
 
+## Permission Denied During Scan, Plan, Or Dry-Run
+
+Symptoms:
+
+- `scan` fails with a BlueZ store readability error.
+- `doctor` reports `no read` for `BlueZ store`.
+- `/var/lib/bluetooth` is owned by `root:root` and mode `0700`.
+
+Check:
+
+```bash
+ls -ld /var/lib/bluetooth
+```
+
+Fix:
+
+```bash
+sudo bluebond scan --windows-root /mnt/windows
+sudo bluebond plan --windows-root /mnt/windows
+sudo bluebond apply --dry-run --windows-root /mnt/windows
+```
+
+These commands are still read-only. `sudo` is needed only because BlueZ protects the bond records.
+
 ## Bluetooth Service Fails To Restart
 
 Symptoms:

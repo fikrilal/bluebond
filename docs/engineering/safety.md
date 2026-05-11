@@ -23,6 +23,8 @@ Read-only commands:
 - `bluebond apply --dry-run`
 - `bluebond rollback list`
 
+Read-only means these commands do not mutate Linux or Windows state. It does not guarantee they can run without privileges. On many Linux systems, `/var/lib/bluetooth` is `0700 root:root`, so commands that inspect real BlueZ bond records may still need `sudo`.
+
 Mutating commands:
 
 - `bluebond apply --execute`

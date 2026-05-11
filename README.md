@@ -12,6 +12,8 @@ BlueBond is intentionally conservative:
 - BlueBond backs up Linux BlueZ records before writing.
 - BlueBond does not print raw Bluetooth keys.
 
+Read-only means BlueBond does not change system state. It does not guarantee the command can run without privileges: many Linux distributions protect `/var/lib/bluetooth` as `0700 root:root`, so `scan`, `plan`, and `apply --dry-run` may need `sudo` to inspect real BlueZ bond records.
+
 ## Status
 
 BlueBond is early public software. It has been built around a real Legion M600 dual-boot case, fixture tests, and an explicit safety workflow, but it is not a general Bluetooth repair tool.
@@ -58,16 +60,16 @@ Prerequisites:
 Download and verify the Linux x86_64 archive:
 
 ```bash
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.0/bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.0/bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
 ```
 
 Extract and install:
 
 ```bash
-tar -xzf bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz
-sudo install -m 0755 bluebond-0.1.0-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
+tar -xzf bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
+sudo install -m 0755 bluebond-0.1.1-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
 bluebond --help
 ```
 
@@ -104,16 +106,34 @@ Inspect Linux BlueZ and Windows Bluetooth inventory:
 bluebond scan --windows-root /mnt/windows
 ```
 
+If `/var/lib/bluetooth` is not readable by your user, run read-only inspection with `sudo`:
+
+```bash
+sudo bluebond scan --windows-root /mnt/windows
+```
+
 Build a read-only plan:
 
 ```bash
 bluebond plan --windows-root /mnt/windows
 ```
 
+Use `sudo` here too if the BlueZ store is protected:
+
+```bash
+sudo bluebond plan --windows-root /mnt/windows
+```
+
 Preview exact apply inputs and target files:
 
 ```bash
 bluebond apply --dry-run --windows-root /mnt/windows
+```
+
+Use `sudo` for dry-run when BlueBond needs to inspect protected BlueZ bond records:
+
+```bash
+sudo bluebond apply --dry-run --windows-root /mnt/windows
 ```
 
 If matching is ambiguous, choose the Linux target device and Windows source device explicitly:

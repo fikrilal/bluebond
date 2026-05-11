@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, BluebondError>;
@@ -31,6 +32,11 @@ pub enum BluebondError {
         recovery: &'static str,
         detail: String,
     },
+
+    #[error(
+        "cannot read BlueZ store at {path}; run with sudo or pass --bluez-dir to a readable BlueZ fixture/export"
+    )]
+    BluezStoreNotReadable { path: PathBuf },
 
     #[error("command failed: {program}")]
     CommandFailed {

@@ -24,6 +24,7 @@ docs/
   troubleshooting.md
   release-notes/
     v0.1.0.md
+    v0.1.1.md
   product/
     engineering-proposal.md
   engineering/

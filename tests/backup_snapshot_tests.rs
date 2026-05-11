@@ -102,7 +102,10 @@ fn writes_backup_snapshot_files_and_metadata() {
         "[General]\nName=Legion M600 Mouse\n"
     );
     let metadata_json = std::fs::read_to_string(&written.metadata_path).unwrap();
-    assert!(metadata_json.contains(r#""bluebond_version": "0.1.0""#));
+    assert!(metadata_json.contains(&format!(
+        r#""bluebond_version": "{}""#,
+        env!("CARGO_PKG_VERSION")
+    )));
     assert!(metadata_json.contains(r#""snapshot_id": "snapshot-1""#));
     assert!(metadata_json.contains("c6c0fdf1fb80"));
 }

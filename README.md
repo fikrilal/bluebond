@@ -46,27 +46,39 @@ Not supported in V1:
 - Broad Bluetooth troubleshooting unrelated to dual-boot bond drift.
 - GUI or TUI flows.
 
-## Install From Source
+## Install From GitHub Releases
 
 Prerequisites:
 
-- Rust stable toolchain.
 - BlueZ.
 - `hivexsh`.
 - `systemctl`.
 - Root access for mutating commands.
 
-Build:
+Download and verify the Linux x86_64 archive:
+
+```bash
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.0/bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.0/bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+```
+
+Extract and install:
+
+```bash
+tar -xzf bluebond-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+sudo install -m 0755 bluebond-0.1.0-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
+bluebond --help
+```
+
+## Install From Source
+
+Source builds require the Rust stable toolchain.
 
 ```bash
 git clone https://github.com/fikrilal/bluebond.git
 cd bluebond
 cargo build --release
-```
-
-Run:
-
-```bash
 ./target/release/bluebond --help
 ```
 

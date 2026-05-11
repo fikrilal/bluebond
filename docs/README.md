@@ -5,6 +5,7 @@ This directory is the source of truth for BlueBond project planning, architectur
 ## Start Here
 
 - [Product engineering proposal](product/engineering-proposal.md): product direction, V1 scope, CLI contract, and milestones.
+- [Release engineering proposal](product/release-engineering-proposal.md): end-to-end public release and tag workflow.
 - [Architecture](engineering/architecture.md): Rust crate layout, layer boundaries, dependency direction, and command flow.
 - [Coding rules](engineering/coding-rules.md): implementation contract, safety rules, verification, and review checklist.
 - [Safety model](engineering/safety.md): mutation boundaries, backups, rollback, and secret-handling expectations.
@@ -21,6 +22,8 @@ docs/
   README.md
   release.md
   troubleshooting.md
+  release-notes/
+    v0.1.0.md
   product/
     engineering-proposal.md
   engineering/

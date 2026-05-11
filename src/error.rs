@@ -7,6 +7,9 @@ pub enum BluebondError {
     #[error("invalid Bluetooth address '{input}'")]
     InvalidBluetoothAddress { input: String },
 
+    #[error("invalid Windows registry value while parsing {context}")]
+    InvalidRegistryValue { context: &'static str },
+
     #[error("command failed: {program}")]
     CommandFailed {
         program: String,

@@ -12,6 +12,36 @@ pub fn run() -> ExitCode {
     let cli = Cli::parse();
 
     match cli.command {
+        Command::Apply {
+            dry_run,
+            bluez_dir,
+            windows_root,
+        } => {
+            if !dry_run {
+                eprintln!(
+                    "bluebond apply requires --dry-run; mutating apply is not implemented yet"
+                );
+                return ExitCode::from(2);
+            }
+
+            let scan_request = build_scan_request(bluez_dir, windows_root);
+
+            match app::scan::run(&scan_request).and_then(|scan_report| {
+                app::apply::build_dry_run_report(
+                    &scan_report,
+                    &app::apply::default_dry_run_request(),
+                )
+            }) {
+                Ok(report) => {
+                    output::print_apply_dry_run_report(&report);
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("bluebond apply dry-run failed: {error}");
+                    ExitCode::from(1)
+                }
+            }
+        }
         Command::Doctor => {
             let report = app::doctor::run();
             output::print_doctor_report(&report);

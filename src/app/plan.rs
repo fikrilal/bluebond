@@ -79,10 +79,14 @@ pub fn render(plan: &SyncPlan, request: &RenderPlanRequest) -> RenderedSyncPlan 
     }
 }
 
-pub fn build_plan(scan_report: &ScanReport, request: &RenderPlanRequest) -> PlanReport {
+pub fn build_sync_plan(scan_report: &ScanReport) -> SyncPlan {
     let bond_state = scan_report.discovered_bond_state();
     let match_report = BondMatchReport::exact_from(&bond_state);
-    let sync_plan = SyncPlan::from_match_report(&match_report);
+    SyncPlan::from_match_report(&match_report)
+}
+
+pub fn build_plan(scan_report: &ScanReport, request: &RenderPlanRequest) -> PlanReport {
+    let sync_plan = build_sync_plan(scan_report);
     let rendered_plan = render(&sync_plan, request);
     let skipped = sync_plan
         .skipped

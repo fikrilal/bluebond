@@ -10,6 +10,12 @@ pub enum BluebondError {
     #[error("invalid Windows registry value while parsing {context}")]
     InvalidRegistryValue { context: &'static str },
 
+    #[error("missing apply preview input: {context}")]
+    MissingPreviewInput { context: &'static str },
+
+    #[error("privileged execution required for {operation}")]
+    PrivilegeRequired { operation: &'static str },
+
     #[error("command failed: {program}")]
     CommandFailed {
         program: String,

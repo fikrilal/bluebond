@@ -1,3 +1,4 @@
+use crate::app::apply::ApplyDryRunReport;
 use crate::app::doctor::DoctorReport;
 use crate::app::plan::{PlanReport, RenderedSkipReason, RenderedSyncChangeType};
 use crate::app::scan::{ScanReport, WindowsBluetoothKeyInspectionStatus, WindowsSystemHiveStatus};
@@ -113,6 +114,63 @@ pub fn print_plan_report(report: &PlanReport, json: bool) -> Result<(), serde_js
     println!("No changes made.");
 
     Ok(())
+}
+
+pub fn print_apply_dry_run_report(report: &ApplyDryRunReport) {
+    println!("BlueBond apply dry-run\n");
+
+    println!("Previewed changes:");
+    if report.content_preview.changes.is_empty() {
+        println!("  none");
+    } else {
+        for (index, change) in report.content_preview.changes.iter().enumerate() {
+            println!("  [{}] {}", index + 1, change.display_name);
+            println!("      Linux adapter: {}", change.linux_adapter_address);
+            println!(
+                "      Linux target:  {}",
+                change.linux_target_device_address
+            );
+            println!(
+                "      Windows source: {}",
+                change.windows_source_device_address
+            );
+            println!("      Target info:   {}", change.target_info_path.display());
+            println!(
+                "      Existing info: {}",
+                if change.existing_info_content.is_some() {
+                    "present"
+                } else {
+                    "missing"
+                }
+            );
+            println!(
+                "      Content:       {}",
+                if change.content_changed {
+                    "would change"
+                } else {
+                    "unchanged"
+                }
+            );
+        }
+    }
+
+    println!();
+    println!(
+        "Backup snapshot root: {}",
+        report.backup_snapshot.root_dir.display()
+    );
+    println!("Backup candidates:");
+    if report.backup_snapshot.entries.is_empty() {
+        println!("  none");
+    } else {
+        for (index, entry) in report.backup_snapshot.entries.iter().enumerate() {
+            println!("  [{}] {}", index + 1, entry.source_path.display());
+            println!("      Backup path: {}", entry.backup_path.display());
+        }
+    }
+
+    println!();
+    println!("No changes made.");
 }
 
 fn print_windows_bluetooth_keys(report: &ScanReport) {

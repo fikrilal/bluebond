@@ -48,6 +48,26 @@ pub fn read_inventory(bluez_dir: &Path) -> Result<Vec<BluetoothAdapter>> {
     Ok(adapters)
 }
 
+pub fn read_device_info_content(
+    bluez_dir: &Path,
+    adapter_address: BluetoothAddress,
+    device_address: BluetoothAddress,
+) -> Result<Option<String>> {
+    let info_path = bluez_dir
+        .join(adapter_address.to_string())
+        .join(device_address.to_string())
+        .join("info");
+
+    match fs::read_to_string(&info_path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(BluebondError::Io {
+            context: "reading BlueZ device info file",
+            source,
+        }),
+    }
+}
+
 fn read_adapter_devices(adapter_dir: &Path) -> Result<Vec<BluetoothDevice>> {
     let entries = fs::read_dir(adapter_dir).map_err(|source| BluebondError::Io {
         context: "reading BlueZ adapter directory",

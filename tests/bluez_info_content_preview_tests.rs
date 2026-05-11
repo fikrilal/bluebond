@@ -3,8 +3,12 @@ use std::path::PathBuf;
 use bluebond::app::apply::{
     self, BluezInfoPreviewRequest, ExistingBluezInfoContent, WindowsDeviceKeyMaterial,
 };
+use bluebond::app::scan::ScanReport;
 use bluebond::convert::windows_key_material;
-use bluebond::domain::{BluetoothAddress, SyncPlan, SyncPlanAction, SyncPlanActionType};
+use bluebond::domain::{
+    BluetoothAdapter, BluetoothAddress, SyncPlan, SyncPlanAction, SyncPlanActionType,
+};
+use bluebond::infra::bluez::store;
 
 #[test]
 fn previews_updated_bluez_info_content_for_existing_record() {
@@ -69,6 +73,36 @@ fn errors_when_action_has_no_windows_key_material() {
     let request = BluezInfoPreviewRequest::new("tests/fixtures/bluez");
 
     let result = apply::preview_bluez_info_content(&plan, &request);
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn reads_existing_bluez_info_content_for_preview_collection() {
+    let content = store::read_device_info_content(
+        &PathBuf::from("tests/fixtures/bluez"),
+        adapter_address(),
+        linux_device_address(),
+    )
+    .unwrap();
+
+    assert!(content.unwrap().contains("[General]\n"));
+}
+
+#[test]
+fn preview_collection_reports_missing_windows_source_material() {
+    let scan_report = ScanReport {
+        bluez_dir: PathBuf::from("tests/fixtures/bluez"),
+        adapters: vec![BluetoothAdapter {
+            address: adapter_address(),
+            devices: Vec::new(),
+        }],
+        windows_candidates: Vec::new(),
+        windows_bluetooth_keys: Vec::new(),
+    };
+    let plan = plan_with_action(SyncPlanActionType::UpdateExistingBluezRecord);
+
+    let result = apply::collect_preview_request(&scan_report, &plan);
 
     assert!(result.is_err());
 }

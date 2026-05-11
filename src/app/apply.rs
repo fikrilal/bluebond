@@ -1,11 +1,17 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::app::plan;
+use crate::app::scan::ScanReport;
 use crate::convert::bluez_info;
 use crate::convert::windows_key_material::WindowsBluetoothKeyMaterial;
 use crate::convert::windows_to_bluez::BluezInfoKeySections;
 use crate::domain::{BluetoothAddress, SyncPlan, SyncPlanAction};
 use crate::error::{BluebondError, Result};
+use crate::infra::backup;
+use crate::infra::bluez::store;
+use crate::infra::linux::privileges;
+use crate::infra::windows::bthport;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct BluezInfoContentPreview {
@@ -63,6 +69,37 @@ pub struct BluezInfoPreviewRequest {
     pub bluez_dir: PathBuf,
     pub existing_infos: Vec<ExistingBluezInfoContent>,
     pub windows_key_materials: Vec<WindowsDeviceKeyMaterial>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct ApplyDryRunReport {
+    pub content_preview: BluezInfoContentPreview,
+    pub backup_snapshot: BackupSnapshot,
+    pub no_changes_made: bool,
+}
+
+impl fmt::Debug for ApplyDryRunReport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ApplyDryRunReport")
+            .field("content_preview", &self.content_preview)
+            .field("backup_snapshot", &self.backup_snapshot)
+            .field("no_changes_made", &self.no_changes_made)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ApplyDryRunRequest {
+    pub backup_root: PathBuf,
+}
+
+impl ApplyDryRunRequest {
+    pub fn new(backup_root: impl Into<PathBuf>) -> Self {
+        Self {
+            backup_root: backup_root.into(),
+        }
+    }
 }
 
 impl BluezInfoPreviewRequest {
@@ -135,6 +172,57 @@ pub fn preview_bluez_info_content(
         .collect::<Result<Vec<_>>>()?;
 
     Ok(BluezInfoContentPreview { changes })
+}
+
+pub fn collect_preview_request(
+    scan_report: &ScanReport,
+    plan: &SyncPlan,
+) -> Result<BluezInfoPreviewRequest> {
+    let existing_infos = collect_existing_infos(scan_report, plan)?;
+    let windows_key_materials = collect_windows_key_materials(scan_report, plan)?;
+
+    Ok(BluezInfoPreviewRequest::new(&scan_report.bluez_dir)
+        .with_existing_infos(existing_infos)
+        .with_windows_key_materials(windows_key_materials))
+}
+
+pub fn preview_from_scan_report(
+    scan_report: &ScanReport,
+    plan: &SyncPlan,
+) -> Result<BluezInfoContentPreview> {
+    let request = collect_preview_request(scan_report, plan)?;
+    preview_bluez_info_content(plan, &request)
+}
+
+pub fn build_dry_run_report(
+    scan_report: &ScanReport,
+    request: &ApplyDryRunRequest,
+) -> Result<ApplyDryRunReport> {
+    let sync_plan = plan::build_sync_plan(scan_report);
+    let content_preview = preview_from_scan_report(scan_report, &sync_plan)?;
+    let backup_snapshot = build_backup_snapshot(&content_preview, &request.backup_root);
+
+    Ok(ApplyDryRunReport {
+        content_preview,
+        backup_snapshot,
+        no_changes_made: true,
+    })
+}
+
+pub fn default_dry_run_request() -> ApplyDryRunRequest {
+    ApplyDryRunRequest::new(Path::new(backup::store::DEFAULT_BACKUP_DIR).join("dry-run-preview"))
+}
+
+pub fn require_privileged_apply() -> Result<()> {
+    require_privileged_apply_with(privileges::running_as_root())
+}
+
+pub fn require_privileged_apply_with(running_as_root: bool) -> Result<()> {
+    if running_as_root {
+        Ok(())
+    } else {
+        Err(BluebondError::PrivilegeRequired { operation: "apply" })
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -214,6 +302,89 @@ fn preview_action(
         next_info_content,
         content_changed,
     })
+}
+
+fn collect_existing_infos(
+    scan_report: &ScanReport,
+    plan: &SyncPlan,
+) -> Result<Vec<ExistingBluezInfoContent>> {
+    plan.actions
+        .iter()
+        .filter_map(|action| {
+            match store::read_device_info_content(
+                &scan_report.bluez_dir,
+                action.linux_adapter_address,
+                action.linux_target_device_address,
+            ) {
+                Ok(Some(content)) => Some(Ok(ExistingBluezInfoContent {
+                    linux_adapter_address: action.linux_adapter_address,
+                    linux_device_address: action.linux_target_device_address,
+                    content,
+                })),
+                Ok(None) => None,
+                Err(error) => Some(Err(error)),
+            }
+        })
+        .collect()
+}
+
+fn collect_windows_key_materials(
+    scan_report: &ScanReport,
+    plan: &SyncPlan,
+) -> Result<Vec<WindowsDeviceKeyMaterial>> {
+    plan.actions
+        .iter()
+        .map(|action| {
+            let source = find_windows_device_source(scan_report, action)?;
+            let material =
+                bthport::read_device_key_material(&source.hive_path, &source.registry_path)?;
+
+            Ok(WindowsDeviceKeyMaterial {
+                linux_adapter_address: action.linux_adapter_address,
+                windows_device_address: action.windows_source_device_address,
+                material,
+            })
+        })
+        .collect()
+}
+
+struct WindowsDeviceMaterialSource {
+    hive_path: PathBuf,
+    registry_path: String,
+}
+
+fn find_windows_device_source(
+    scan_report: &ScanReport,
+    action: &SyncPlanAction,
+) -> Result<WindowsDeviceMaterialSource> {
+    scan_report
+        .windows_bluetooth_keys
+        .iter()
+        .flat_map(|inspection| {
+            inspection.adapters.iter().flat_map(move |adapter| {
+                adapter.devices.iter().map(move |device| {
+                    (
+                        inspection.hive_path.clone(),
+                        adapter.adapter_address,
+                        device.device_address,
+                        device.registry_path.clone(),
+                    )
+                })
+            })
+        })
+        .find(|(_, adapter_address, device_address, _)| {
+            *adapter_address == action.linux_adapter_address
+                && *device_address == action.windows_source_device_address
+        })
+        .map(
+            |(hive_path, _, _, registry_path)| WindowsDeviceMaterialSource {
+                hive_path,
+                registry_path,
+            },
+        )
+        .ok_or(BluebondError::MissingPreviewInput {
+            context: "Windows source device registry path",
+        })
 }
 
 fn backup_entry_for_change(

@@ -13,6 +13,21 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Preview BlueZ apply changes without making changes.
+    Apply {
+        /// Only preview changes; do not write BlueZ files or restart Bluetooth.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Override the BlueZ store directory.
+        #[arg(long, value_name = "PATH")]
+        bluez_dir: Option<PathBuf>,
+
+        /// Override the offline Windows root directory.
+        #[arg(long, value_name = "PATH")]
+        windows_root: Option<PathBuf>,
+    },
+
     /// Check host tools and paths needed by BlueBond.
     Doctor,
 

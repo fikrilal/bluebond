@@ -48,3 +48,40 @@ pub fn write_metadata(snapshot_root: &Path, metadata_json: &str) -> Result<PathB
 
     Ok(metadata_path)
 }
+
+pub fn read_metadata(metadata_path: &Path) -> Result<String> {
+    fs::read_to_string(metadata_path).map_err(|source| BluebondError::Io {
+        context: "reading backup metadata",
+        source,
+    })
+}
+
+pub fn list_metadata_files(backup_root: &Path) -> Result<Vec<PathBuf>> {
+    let entries = match fs::read_dir(backup_root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => {
+            return Err(BluebondError::Io {
+                context: "reading backup root",
+                source,
+            });
+        }
+    };
+
+    let mut metadata_files = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|source| BluebondError::Io {
+            context: "reading backup root entry",
+            source,
+        })?;
+        let metadata_path = entry.path().join(METADATA_FILE_NAME);
+
+        if metadata_path.is_file() {
+            metadata_files.push(metadata_path);
+        }
+    }
+
+    metadata_files.sort();
+    Ok(metadata_files)
+}

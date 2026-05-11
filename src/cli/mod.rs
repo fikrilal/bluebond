@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 use crate::app;
-use args::{Cli, Command};
+use args::{Cli, Command, RollbackCommand};
 
 pub fn run() -> ExitCode {
     let cli = Cli::parse();
@@ -88,6 +88,38 @@ pub fn run() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
+        Command::Rollback { command } => match command {
+            RollbackCommand::List { backup_dir } => {
+                let backup_dir = backup_dir.unwrap_or_else(app::rollback::default_backup_dir);
+
+                match app::rollback::list_backups(&backup_dir) {
+                    Ok(report) => {
+                        output::print_rollback_backup_list(&report);
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("bluebond rollback list failed: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+            RollbackCommand::Restore { metadata } => {
+                let request = app::rollback::RollbackRestoreRequest {
+                    metadata_path: metadata,
+                };
+
+                match app::rollback::restore_backup(&request) {
+                    Ok(report) => {
+                        output::print_rollback_restore_report(&report);
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("bluebond rollback restore failed: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+        },
         Command::Plan {
             bluez_dir,
             windows_root,

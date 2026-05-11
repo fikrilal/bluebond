@@ -1,6 +1,7 @@
 use crate::app::apply::{ApplyDryRunReport, ApplyExecuteReport};
 use crate::app::doctor::DoctorReport;
 use crate::app::plan::{PlanReport, RenderedSkipReason, RenderedSyncChangeType};
+use crate::app::rollback::{RollbackBackupList, RollbackRestoreReport};
 use crate::app::scan::{ScanReport, WindowsBluetoothKeyInspectionStatus, WindowsSystemHiveStatus};
 
 pub fn print_doctor_report(report: &DoctorReport) {
@@ -192,6 +193,50 @@ pub fn print_apply_execute_report(report: &ApplyExecuteReport) {
     println!(
         "Verification: {}",
         if report.verification.all_expected_records_visible() {
+            "passed"
+        } else {
+            "needs review"
+        }
+    );
+    println!(
+        "Manual check: {}",
+        report.verification.manual_reconnect_check
+    );
+}
+
+pub fn print_rollback_backup_list(report: &RollbackBackupList) {
+    println!("BlueBond rollback backups\n");
+
+    if report.backups.is_empty() {
+        println!("No BlueBond backups found.");
+        return;
+    }
+
+    for (index, backup) in report.backups.iter().enumerate() {
+        println!("  [{}] {}", index + 1, backup.snapshot_id);
+        println!("      Metadata: {}", backup.metadata_path.display());
+        println!("      Operation: {}", backup.operation);
+        println!("      BlueBond: {}", backup.bluebond_version);
+        println!("      Changes: {}", backup.changes.len());
+
+        for change in &backup.changes {
+            println!("        - {}", change.display_name);
+            println!("          Target: {}", change.target_info_path.display());
+            match &change.backup_path {
+                Some(backup_path) => println!("          Backup: {}", backup_path.display()),
+                None => println!("          Backup: none"),
+            }
+        }
+    }
+}
+
+pub fn print_rollback_restore_report(report: &RollbackRestoreReport) {
+    println!("BlueBond rollback restore\n");
+    println!("Metadata: {}", report.metadata_path.display());
+    println!("Restored files: {}", report.restored_files.len());
+    println!(
+        "Verification: {}",
+        if report.verification.all_targets_visible() {
             "passed"
         } else {
             "needs review"

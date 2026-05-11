@@ -47,6 +47,12 @@ pub enum Command {
     /// Check host tools and paths needed by BlueBond.
     Doctor,
 
+    /// List or restore BlueBond backups.
+    Rollback {
+        #[command(subcommand)]
+        command: RollbackCommand,
+    },
+
     /// Generate a dry-run BlueZ sync plan without making changes.
     Plan {
         /// Override the BlueZ store directory.
@@ -71,5 +77,22 @@ pub enum Command {
         /// Override the offline Windows root directory.
         #[arg(long, value_name = "PATH")]
         windows_root: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RollbackCommand {
+    /// List BlueBond backup snapshots.
+    List {
+        /// Override the BlueBond backup directory.
+        #[arg(long, value_name = "PATH")]
+        backup_dir: Option<PathBuf>,
+    },
+
+    /// Restore a selected BlueBond backup metadata file.
+    Restore {
+        /// Path to a bluebond-backup.json metadata file.
+        #[arg(long, value_name = "PATH")]
+        metadata: PathBuf,
     },
 }

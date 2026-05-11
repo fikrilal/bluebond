@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::app::plan;
 use crate::app::scan::ScanReport;
@@ -444,17 +444,17 @@ pub struct ApplyVerificationDevice {
     pub has_long_term_key: bool,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ApplySafetyMetadata {
     pub schema_version: u32,
-    pub bluebond_version: &'static str,
+    pub bluebond_version: String,
     pub operation: String,
     pub snapshot_id: String,
     pub backup_root: PathBuf,
     pub changes: Vec<ApplySafetyMetadataChange>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ApplySafetyMetadataChange {
     pub display_name: String,
     pub linux_adapter_address: String,
@@ -492,7 +492,7 @@ pub fn build_safety_metadata(
 
     ApplySafetyMetadata {
         schema_version: 1,
-        bluebond_version: env!("CARGO_PKG_VERSION"),
+        bluebond_version: env!("CARGO_PKG_VERSION").to_string(),
         operation: operation.into(),
         snapshot_id,
         backup_root: snapshot.root_dir.clone(),

@@ -363,7 +363,7 @@ When a recurring mistake appears twice, promote it into one of:
 
 - `docs/engineering/coding-rules.md`
 - `docs/engineering/architecture.md`
-- `docs/safety.md`
+- `docs/engineering/safety.md`
 - a verify script
 - a test fixture
 

@@ -132,6 +132,7 @@ Current verification stages:
 
 - docs structure checks
 - architecture checks
+- fixture safety checks
 - Rust formatting once `Cargo.toml` exists
 - Rust clippy once `Cargo.toml` exists
 - Rust tests once `Cargo.toml` exists
@@ -142,8 +143,11 @@ Architecture checks should start small and grow with the codebase.
 
 Initial checks:
 
-- `domain` must not import `infra` or `cli`
-- `infra` must not import `cli`
+- `domain` must not import `infra`, `app`, or `cli`
+- `domain` must not use filesystem, path, process, or environment APIs
+- `app` must not import `cli`
+- `infra` must not import `app` or `cli`
+- `cli` must not import `infra` directly
 - direct `std::process::Command` must only appear in `infra::command`
 - direct BlueZ writes must only appear in `infra::bluez::store`
 
@@ -162,6 +166,20 @@ tests/fixtures/command-output/
 ```
 
 The real Legion M600 case should be converted into anonymized fixtures with fake deterministic keys.
+
+Fixture safety checks live in:
+
+```bash
+./tool/check_fixtures.sh
+```
+
+The fixture checker currently rejects:
+
+- unapproved 16-byte BlueZ key fixture values
+- Windows registry binary key material committed as fixture text without an explicit fake allowlist
+- test code that depends on machine-local paths such as `/mnt/windows` or `/var/lib/bluetooth`
+
+Smoke tests against real machine state are allowed during development, but they must stay out of automated tests and committed fixtures.
 
 ## Initial Harness Build Order
 

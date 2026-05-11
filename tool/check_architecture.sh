@@ -36,6 +36,21 @@ check_forbidden \
   'crate::cli|super::super::cli'
 
 check_forbidden \
+  "domain must not import app" \
+  "src/domain" \
+  'crate::app|super::super::app'
+
+check_forbidden \
+  "domain must not use filesystem, path, process, or environment APIs" \
+  "src/domain" \
+  'std::fs|std::path|std::process|std::env'
+
+check_forbidden \
+  "app must not import cli" \
+  "src/app" \
+  'crate::cli|super::super::cli'
+
+check_forbidden \
   "infra must not import cli" \
   "src/infra" \
   'crate::cli|super::super::cli'
@@ -44,6 +59,11 @@ check_forbidden \
   "infra must not import app" \
   "src/infra" \
   'crate::app|super::super::app'
+
+check_forbidden \
+  "cli must not import infra directly" \
+  "src/cli" \
+  'crate::infra|super::super::infra'
 
 if rg -n 'std::process::Command|process::Command' src --glob '*.rs' \
   --glob '!src/infra/command.rs' \

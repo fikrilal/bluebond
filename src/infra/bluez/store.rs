@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::domain::{BluetoothAdapter, BluetoothAddress, BluetoothDevice};
@@ -46,6 +48,62 @@ pub fn read_inventory(bluez_dir: &Path) -> Result<Vec<BluetoothAdapter>> {
 
     adapters.sort_by_key(|adapter| adapter.address);
     Ok(adapters)
+}
+
+pub fn read_device_info_content(
+    bluez_dir: &Path,
+    adapter_address: BluetoothAddress,
+    device_address: BluetoothAddress,
+) -> Result<Option<String>> {
+    let info_path = bluez_dir
+        .join(adapter_address.to_string())
+        .join(device_address.to_string())
+        .join("info");
+
+    match fs::read_to_string(&info_path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(BluebondError::Io {
+            context: "reading BlueZ device info file",
+            source,
+        }),
+    }
+}
+
+pub fn write_device_info_atomic(info_path: &Path, content: &str) -> Result<()> {
+    let Some(parent) = info_path.parent() else {
+        return Err(BluebondError::Io {
+            context: "resolving BlueZ info parent directory",
+            source: std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "BlueZ info path has no parent directory",
+            ),
+        });
+    };
+
+    fs::create_dir_all(parent).map_err(|source| BluebondError::Io {
+        context: "creating BlueZ device directory",
+        source,
+    })?;
+
+    let temp_path = parent.join("info.bluebond.tmp");
+    fs::write(&temp_path, content).map_err(|source| BluebondError::Io {
+        context: "writing temporary BlueZ info file",
+        source,
+    })?;
+
+    #[cfg(unix)]
+    fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600)).map_err(|source| {
+        BluebondError::Io {
+            context: "setting BlueZ info permissions",
+            source,
+        }
+    })?;
+
+    fs::rename(&temp_path, info_path).map_err(|source| BluebondError::Io {
+        context: "renaming BlueZ info file",
+        source,
+    })
 }
 
 fn read_adapter_devices(adapter_dir: &Path) -> Result<Vec<BluetoothDevice>> {

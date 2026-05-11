@@ -14,6 +14,9 @@ required_docs=(
   "docs/product/engineering-proposal.md"
   "docs/engineering/architecture.md"
   "docs/engineering/coding-rules.md"
+  "docs/engineering/safety.md"
+  "docs/troubleshooting.md"
+  "docs/release.md"
   "docs/harness/agent-harness.md"
   "docs/case-studies/bluetooth-dual-boot-problem.md"
   "docs/exec-plans/README.md"
@@ -30,6 +33,9 @@ done
 
 step "Verify architecture guardrails"
 ./tool/check_architecture.sh
+
+step "Verify fixture safety"
+./tool/check_fixtures.sh
 
 if [[ -f Cargo.toml ]]; then
   step "Cargo fmt"

@@ -1,6 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use crate::convert::windows_key_material::{
+    parse_hivexsh_lsval_output, WindowsBluetoothKeyMaterial,
+};
 use crate::domain::BluetoothAddress;
+use crate::error::Result;
 use crate::infra::command;
 
 const CONTROL_SET_RANGE: std::ops::RangeInclusive<u8> = 1..=9;
@@ -84,6 +88,17 @@ pub fn inspect_adapter_keys(hive_path: &Path) -> WindowsBluetoothKeyInspection {
         status,
         adapters,
     }
+}
+
+pub fn read_device_key_material(
+    hive_path: &Path,
+    device_registry_path: &str,
+) -> Result<WindowsBluetoothKeyMaterial> {
+    let hive = hive_path.to_string_lossy();
+    let script = format!("cd \\{device_registry_path}\nlsval\nquit\n");
+    let output = command::run_with_stdin("hivexsh", &[hive.as_ref()], &script)?;
+
+    parse_hivexsh_lsval_output(&output.stdout)
 }
 
 pub fn parse_adapter_key_listing(

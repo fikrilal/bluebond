@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security guidance
+    url: https://github.com/fikrilal/bluebond/blob/development/SECURITY.md
+    about: Read this before reporting anything involving Bluetooth key material.

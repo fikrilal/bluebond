@@ -25,6 +25,7 @@ pub fn run() -> ExitCode {
         Command::Plan {
             bluez_dir,
             windows_root,
+            json,
         } => {
             let scan_request = build_scan_request(bluez_dir.clone(), windows_root);
 
@@ -36,8 +37,13 @@ pub fn run() -> ExitCode {
                     };
                     let plan_report = app::plan::build_plan(&scan_report, &render_request);
 
-                    output::print_plan_report(&plan_report);
-                    ExitCode::SUCCESS
+                    match output::print_plan_report(&plan_report, json) {
+                        Ok(()) => ExitCode::SUCCESS,
+                        Err(error) => {
+                            eprintln!("bluebond plan failed: {error}");
+                            ExitCode::from(1)
+                        }
+                    }
                 }
                 Err(error) => {
                     eprintln!("bluebond plan failed: {error}");

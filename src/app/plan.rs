@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::app::scan::ScanReport;
 use crate::domain::{BondMatchReport, SkipReason, SyncPlan, SyncPlanAction, SyncPlanActionType};
 use crate::infra::bluez::store;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RenderPlanRequest {
@@ -17,19 +18,20 @@ impl RenderPlanRequest {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct RenderedSyncPlan {
     pub bluez_dir: PathBuf,
     pub changes: Vec<RenderedSyncChange>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct PlanReport {
     pub rendered_plan: RenderedSyncPlan,
     pub skipped: Vec<RenderedSkippedCandidate>,
+    pub no_changes_made: bool,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct RenderedSkippedCandidate {
     pub linux_adapter_address: String,
     pub linux_device_address: String,
@@ -37,7 +39,8 @@ pub struct RenderedSkippedCandidate {
     pub reason: RenderedSkipReason,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RenderedSkipReason {
     MissingWindowsAdapter,
     MissingWindowsDevice,
@@ -45,7 +48,7 @@ pub enum RenderedSkipReason {
     AmbiguousAddressDrift,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct RenderedSyncChange {
     pub change_type: RenderedSyncChangeType,
     pub display_name: String,
@@ -56,7 +59,8 @@ pub struct RenderedSyncChange {
     pub target_info_path: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RenderedSyncChangeType {
     CreateBluezRecord,
     UpdateBluezRecord,
@@ -94,6 +98,7 @@ pub fn build_plan(scan_report: &ScanReport, request: &RenderPlanRequest) -> Plan
     PlanReport {
         rendered_plan,
         skipped,
+        no_changes_made: true,
     }
 }
 

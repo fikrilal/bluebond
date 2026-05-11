@@ -25,6 +25,10 @@ pub enum Command {
         /// Override the offline Windows root directory.
         #[arg(long, value_name = "PATH")]
         windows_root: Option<PathBuf>,
+
+        /// Print the dry-run plan as JSON.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Read Linux BlueZ adapters and devices without making changes.

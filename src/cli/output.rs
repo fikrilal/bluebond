@@ -54,7 +54,12 @@ pub fn print_scan_report(report: &ScanReport) {
     }
 }
 
-pub fn print_plan_report(report: &PlanReport) {
+pub fn print_plan_report(report: &PlanReport, json: bool) -> Result<(), serde_json::Error> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report)?);
+        return Ok(());
+    }
+
     println!("BlueBond plan\n");
     println!("BlueZ store: {}", report.rendered_plan.bluez_dir.display());
     println!();
@@ -106,6 +111,8 @@ pub fn print_plan_report(report: &PlanReport) {
 
     println!();
     println!("No changes made.");
+
+    Ok(())
 }
 
 fn print_windows_bluetooth_keys(report: &ScanReport) {

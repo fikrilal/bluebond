@@ -42,10 +42,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${GITHUB_REF_NAME}"
+          notes_file="docs/release-notes/${tag}.md"
+          notes_args=(--notes "See CHANGELOG.md for release notes.")
+
+          if [[ -f "$notes_file" ]]; then
+            notes_args=(--notes-file "$notes_file")
+          fi
+
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/*.tar.gz dist/*.sha256 --clobber
           else
             gh release create "$tag" dist/*.tar.gz dist/*.sha256 \
               --title "$tag" \
-              --notes "See CHANGELOG.md for release notes."
+              "${notes_args[@]}"
           fi

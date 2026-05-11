@@ -6,6 +6,10 @@ The format follows a simple human-maintained changelog. BlueBond is pre-1.0, so 
 
 ## Unreleased
 
+- No unreleased changes yet.
+
+## v0.1.0 - 2026-05-11
+
 ### Added
 
 - Rust CLI scaffold with `doctor`, `scan`, `plan`, `apply`, and `rollback` commands.

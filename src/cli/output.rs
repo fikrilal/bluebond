@@ -1,4 +1,5 @@
 use crate::app::doctor::DoctorReport;
+use crate::app::plan::{PlanReport, RenderedSkipReason, RenderedSyncChangeType};
 use crate::app::scan::{ScanReport, WindowsBluetoothKeyInspectionStatus, WindowsSystemHiveStatus};
 
 pub fn print_doctor_report(report: &DoctorReport) {
@@ -51,6 +52,60 @@ pub fn print_scan_report(report: &ScanReport) {
             );
         }
     }
+}
+
+pub fn print_plan_report(report: &PlanReport) {
+    println!("BlueBond plan\n");
+    println!("BlueZ store: {}", report.rendered_plan.bluez_dir.display());
+    println!();
+
+    println!("Planned changes:");
+    if report.rendered_plan.changes.is_empty() {
+        println!("  none");
+    } else {
+        for (index, change) in report.rendered_plan.changes.iter().enumerate() {
+            println!(
+                "  [{}] {}  {}",
+                index + 1,
+                format_rendered_change_type(change.change_type),
+                change.display_name
+            );
+            println!("      Linux adapter: {}", change.linux_adapter_address);
+            println!(
+                "      Linux target:  {}",
+                change.linux_target_device_address
+            );
+            println!(
+                "      Windows source: {}",
+                change.windows_source_device_address
+            );
+            println!(
+                "      Target dir:    {}",
+                change.target_device_dir.display()
+            );
+            println!("      Target info:   {}", change.target_info_path.display());
+        }
+    }
+
+    println!();
+    println!("Skipped candidates:");
+    if report.skipped.is_empty() {
+        println!("  none");
+    } else {
+        for (index, skipped) in report.skipped.iter().enumerate() {
+            println!(
+                "  [{}] {}  {}",
+                index + 1,
+                skipped.linux_device_address,
+                skipped.display_name
+            );
+            println!("      Linux adapter: {}", skipped.linux_adapter_address);
+            println!("      Reason: {}", format_skip_reason(skipped.reason));
+        }
+    }
+
+    println!();
+    println!("No changes made.");
 }
 
 fn print_windows_bluetooth_keys(report: &ScanReport) {
@@ -164,5 +219,21 @@ fn format_windows_bluetooth_key_status(
         WindowsBluetoothKeyInspectionStatus::MissingTool => "hivexsh missing",
         WindowsBluetoothKeyInspectionStatus::NoKeysFound => "no adapter keys found",
         WindowsBluetoothKeyInspectionStatus::CommandFailed => "registry inspection failed",
+    }
+}
+
+fn format_rendered_change_type(change_type: RenderedSyncChangeType) -> &'static str {
+    match change_type {
+        RenderedSyncChangeType::CreateBluezRecord => "create BlueZ record",
+        RenderedSyncChangeType::UpdateBluezRecord => "update BlueZ record",
+    }
+}
+
+fn format_skip_reason(reason: RenderedSkipReason) -> &'static str {
+    match reason {
+        RenderedSkipReason::MissingWindowsAdapter => "missing Windows adapter",
+        RenderedSkipReason::MissingWindowsDevice => "missing Windows device",
+        RenderedSkipReason::MissingWindowsKeyMaterial => "missing Windows key material",
+        RenderedSkipReason::AmbiguousAddressDrift => "ambiguous address drift",
     }
 }

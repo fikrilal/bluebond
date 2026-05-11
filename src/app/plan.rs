@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use crate::domain::{SyncPlan, SyncPlanAction, SyncPlanActionType};
+use crate::app::scan::ScanReport;
+use crate::domain::{BondMatchReport, SkipReason, SyncPlan, SyncPlanAction, SyncPlanActionType};
 use crate::infra::bluez::store;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -20,6 +21,28 @@ impl RenderPlanRequest {
 pub struct RenderedSyncPlan {
     pub bluez_dir: PathBuf,
     pub changes: Vec<RenderedSyncChange>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct PlanReport {
+    pub rendered_plan: RenderedSyncPlan,
+    pub skipped: Vec<RenderedSkippedCandidate>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RenderedSkippedCandidate {
+    pub linux_adapter_address: String,
+    pub linux_device_address: String,
+    pub display_name: String,
+    pub reason: RenderedSkipReason,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RenderedSkipReason {
+    MissingWindowsAdapter,
+    MissingWindowsDevice,
+    MissingWindowsKeyMaterial,
+    AmbiguousAddressDrift,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -52,6 +75,28 @@ pub fn render(plan: &SyncPlan, request: &RenderPlanRequest) -> RenderedSyncPlan 
     }
 }
 
+pub fn build_plan(scan_report: &ScanReport, request: &RenderPlanRequest) -> PlanReport {
+    let bond_state = scan_report.discovered_bond_state();
+    let match_report = BondMatchReport::exact_from(&bond_state);
+    let sync_plan = SyncPlan::from_match_report(&match_report);
+    let rendered_plan = render(&sync_plan, request);
+    let skipped = sync_plan
+        .skipped
+        .iter()
+        .map(|skipped| RenderedSkippedCandidate {
+            linux_adapter_address: skipped.linux_adapter_address.to_string(),
+            linux_device_address: skipped.linux_device_address.to_string(),
+            display_name: skipped.display_name.clone(),
+            reason: render_skip_reason(skipped.reason),
+        })
+        .collect();
+
+    PlanReport {
+        rendered_plan,
+        skipped,
+    }
+}
+
 pub fn default_request() -> RenderPlanRequest {
     RenderPlanRequest::new(Path::new(store::DEFAULT_BLUEZ_DIR))
 }
@@ -77,5 +122,14 @@ fn render_change_type(action_type: SyncPlanActionType) -> RenderedSyncChangeType
     match action_type {
         SyncPlanActionType::CreateBluezRecord => RenderedSyncChangeType::CreateBluezRecord,
         SyncPlanActionType::UpdateExistingBluezRecord => RenderedSyncChangeType::UpdateBluezRecord,
+    }
+}
+
+fn render_skip_reason(reason: SkipReason) -> RenderedSkipReason {
+    match reason {
+        SkipReason::MissingWindowsAdapter => RenderedSkipReason::MissingWindowsAdapter,
+        SkipReason::MissingWindowsDevice => RenderedSkipReason::MissingWindowsDevice,
+        SkipReason::MissingWindowsKeyMaterial => RenderedSkipReason::MissingWindowsKeyMaterial,
+        SkipReason::AmbiguousAddressDrift => RenderedSkipReason::AmbiguousAddressDrift,
     }
 }

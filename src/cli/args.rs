@@ -16,6 +16,17 @@ pub enum Command {
     /// Check host tools and paths needed by BlueBond.
     Doctor,
 
+    /// Generate a dry-run BlueZ sync plan without making changes.
+    Plan {
+        /// Override the BlueZ store directory.
+        #[arg(long, value_name = "PATH")]
+        bluez_dir: Option<PathBuf>,
+
+        /// Override the offline Windows root directory.
+        #[arg(long, value_name = "PATH")]
+        windows_root: Option<PathBuf>,
+    },
+
     /// Read Linux BlueZ adapters and devices without making changes.
     Scan {
         /// Override the BlueZ store directory.

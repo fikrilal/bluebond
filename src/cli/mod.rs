@@ -22,19 +22,34 @@ pub fn run() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
+        Command::Plan {
+            bluez_dir,
+            windows_root,
+        } => {
+            let scan_request = build_scan_request(bluez_dir.clone(), windows_root);
+
+            match app::scan::run(&scan_request) {
+                Ok(scan_report) => {
+                    let render_request = match bluez_dir {
+                        Some(bluez_dir) => app::plan::RenderPlanRequest::new(bluez_dir),
+                        None => app::plan::default_request(),
+                    };
+                    let plan_report = app::plan::build_plan(&scan_report, &render_request);
+
+                    output::print_plan_report(&plan_report);
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("bluebond plan failed: {error}");
+                    ExitCode::from(1)
+                }
+            }
+        }
         Command::Scan {
             bluez_dir,
             windows_root,
         } => {
-            let request = match bluez_dir {
-                Some(bluez_dir) => app::scan::ScanRequest::new(bluez_dir),
-                None => app::scan::default_request(),
-            };
-
-            let request = match windows_root {
-                Some(windows_root) => request.with_windows_root(windows_root),
-                None => request,
-            };
+            let request = build_scan_request(bluez_dir, windows_root);
 
             match app::scan::run(&request) {
                 Ok(report) => {
@@ -47,5 +62,20 @@ pub fn run() -> ExitCode {
                 }
             }
         }
+    }
+}
+
+fn build_scan_request(
+    bluez_dir: Option<std::path::PathBuf>,
+    windows_root: Option<std::path::PathBuf>,
+) -> app::scan::ScanRequest {
+    let request = match bluez_dir {
+        Some(bluez_dir) => app::scan::ScanRequest::new(bluez_dir),
+        None => app::scan::default_request(),
+    };
+
+    match windows_root {
+        Some(windows_root) => request.with_windows_root(windows_root),
+        None => request,
     }
 }

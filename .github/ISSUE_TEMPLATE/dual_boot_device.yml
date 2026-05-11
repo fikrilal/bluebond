@@ -1,0 +1,47 @@
+name: Dual-boot device report
+description: Share a device that does or does not work with BlueBond.
+title: "device: "
+labels:
+  - device-report
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template helps build compatibility knowledge. Do not include raw Bluetooth keys or full registry/BlueZ files.
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+      placeholder: "Lenovo Legion M600 Mouse"
+    validations:
+      required: true
+  - type: textarea
+    id: host
+    attributes:
+      label: Host setup
+      placeholder: |
+        Linux distro:
+        BlueZ version:
+        Windows version:
+        Bluetooth adapter:
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works after apply
+        - Dry-run finds candidate but apply not tested
+        - No safe candidate found
+        - Apply completed but device still does not reconnect
+        - Rollback needed
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Include redacted scan/plan details if useful.
+    validations:
+      required: false

@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a BlueBond failure or unexpected behavior.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include raw Bluetooth keys, full BlueZ `info` files, full Windows registry exports, or Windows hive files.
+  - type: input
+    id: version
+    attributes:
+      label: BlueBond version or commit
+      placeholder: "bluebond 0.1.0 or git commit"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Linux distro, BlueZ version, Windows version, device model, and whether this is dual boot.
+      placeholder: |
+        Linux:
+        BlueZ:
+        Windows:
+        Device:
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands run
+      description: Include exact BlueBond commands. Redact personal paths if needed.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Redacted output
+      description: Paste redacted `doctor`, `scan`, `plan`, or `apply --dry-run` output. Do not include raw key material.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant service logs
+      description: Redacted `systemctl status bluetooth.service` or `journalctl -u bluetooth.service -b` output if service restart failed.
+      render: text
+    validations:
+      required: false

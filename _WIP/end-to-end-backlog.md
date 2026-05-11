@@ -212,6 +212,8 @@ Acceptance:
 
 ## Milestone 6: Public Project Readiness
 
+Status: done.
+
 Goal: make the project usable, understandable, and maintainable for external users.
 
 Candidate exec plans:
@@ -266,18 +268,16 @@ Non-goals until V1 is solid:
 
 ## First Pull Candidates
 
-The next small task should come from Milestone 1.
+The next small task should come from Milestone 7 or from follow-up debt found while testing the first public release.
 
 Recommended order:
 
-1. `feat(scan): detect linux bluez inventory`
-2. `feat(scan): detect windows system hive candidates`
-3. `feat(scan): extract windows bluetooth key paths`
-4. `feat(domain): model bluetooth bond state`
-5. `feat(match): match windows and linux devices`
-6. `feat(plan): generate bluez sync plan`
+1. Test `apply --execute` on the real dual-boot mouse workflow.
+2. Cut a pre-release tag after the live workflow is validated.
+3. Add distro-specific troubleshooting notes from real machines.
+4. Consider native registry parsing after the CLI workflow is stable.
 
-The first task is intentionally Linux-only and read-only. It gives us real local state, fixture tests, and CLI output without entering privileged write behavior.
+The early read-only and safe-apply milestones are complete. The next useful work should either validate V1 in the field or improve post-V1 ergonomics.
 
 ## Backlog Hygiene
 

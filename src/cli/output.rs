@@ -1,4 +1,4 @@
-use crate::app::apply::ApplyDryRunReport;
+use crate::app::apply::{ApplyDryRunReport, ApplyExecuteReport};
 use crate::app::doctor::DoctorReport;
 use crate::app::plan::{PlanReport, RenderedSkipReason, RenderedSyncChangeType};
 use crate::app::scan::{ScanReport, WindowsBluetoothKeyInspectionStatus, WindowsSystemHiveStatus};
@@ -171,6 +171,36 @@ pub fn print_apply_dry_run_report(report: &ApplyDryRunReport) {
 
     println!();
     println!("No changes made.");
+}
+
+pub fn print_apply_execute_report(report: &ApplyExecuteReport) {
+    println!("BlueBond apply execute\n");
+    println!("Backup root: {}", report.backup.root_dir.display());
+    println!("Metadata: {}", report.backup.metadata_path.display());
+    println!(
+        "Backup files written: {}",
+        report.backup.files_written.len()
+    );
+    println!(
+        "BlueZ info files written: {}",
+        report.bluez_writes.files_written.len()
+    );
+    println!(
+        "Bluetooth service: stopped={}, started={}",
+        report.service.stopped, report.service.started
+    );
+    println!(
+        "Verification: {}",
+        if report.verification.all_expected_records_visible() {
+            "passed"
+        } else {
+            "needs review"
+        }
+    );
+    println!(
+        "Manual check: {}",
+        report.verification.manual_reconnect_check
+    );
 }
 
 fn print_windows_bluetooth_keys(report: &ScanReport) {

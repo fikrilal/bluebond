@@ -1,15 +1,17 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+
 use crate::app::plan;
 use crate::app::scan::ScanReport;
 use crate::convert::bluez_info;
 use crate::convert::windows_key_material::WindowsBluetoothKeyMaterial;
 use crate::convert::windows_to_bluez::BluezInfoKeySections;
-use crate::domain::{BluetoothAddress, SyncPlan, SyncPlanAction};
+use crate::domain::{BluetoothAddress, SyncPlan, SyncPlanAction, SyncPlanActionType};
 use crate::error::{BluebondError, Result};
 use crate::infra::backup;
-use crate::infra::bluez::store;
+use crate::infra::bluez::{service, store};
 use crate::infra::linux::privileges;
 use crate::infra::windows::bthport;
 
@@ -33,6 +35,7 @@ pub struct BluezInfoContentChange {
     pub linux_adapter_address: BluetoothAddress,
     pub linux_target_device_address: BluetoothAddress,
     pub windows_source_device_address: BluetoothAddress,
+    pub windows_source_registry_path: Option<String>,
     pub target_info_path: PathBuf,
     pub existing_info_content: Option<String>,
     pub next_info_content: String,
@@ -92,13 +95,71 @@ impl fmt::Debug for ApplyDryRunReport {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ApplyDryRunRequest {
     pub backup_root: PathBuf,
+    pub manual_selection: Option<ManualApplySelection>,
 }
 
 impl ApplyDryRunRequest {
     pub fn new(backup_root: impl Into<PathBuf>) -> Self {
         Self {
             backup_root: backup_root.into(),
+            manual_selection: None,
         }
+    }
+
+    pub fn with_manual_selection(mut self, manual_selection: ManualApplySelection) -> Self {
+        self.manual_selection = Some(manual_selection);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ApplyExecuteRequest {
+    pub backup_base_dir: PathBuf,
+    pub manual_selection: Option<ManualApplySelection>,
+}
+
+impl ApplyExecuteRequest {
+    pub fn new(backup_base_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            backup_base_dir: backup_base_dir.into(),
+            manual_selection: None,
+        }
+    }
+
+    pub fn with_manual_selection(mut self, manual_selection: ManualApplySelection) -> Self {
+        self.manual_selection = Some(manual_selection);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ApplyExecuteReport {
+    pub backup: WrittenBackupSnapshot,
+    pub bluez_writes: WrittenBluezInfoRecords,
+    pub service: BluetoothServiceRestartReport,
+    pub verification: ApplyVerificationReport,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ManualApplySelection {
+    pub adapter_address: Option<BluetoothAddress>,
+    pub target_device_address: BluetoothAddress,
+    pub windows_source_device_address: BluetoothAddress,
+}
+
+impl ManualApplySelection {
+    pub fn from_raw(
+        adapter_address: Option<&str>,
+        target_device_address: &str,
+        windows_source_device_address: &str,
+    ) -> Result<Self> {
+        Ok(Self {
+            adapter_address: adapter_address
+                .map(str::parse::<BluetoothAddress>)
+                .transpose()?,
+            target_device_address: target_device_address.parse()?,
+            windows_source_device_address: windows_source_device_address.parse()?,
+        })
     }
 }
 
@@ -147,6 +208,7 @@ impl fmt::Debug for ExistingBluezInfoContent {
 pub struct WindowsDeviceKeyMaterial {
     pub linux_adapter_address: BluetoothAddress,
     pub windows_device_address: BluetoothAddress,
+    pub registry_path: Option<String>,
     pub material: WindowsBluetoothKeyMaterial,
 }
 
@@ -156,6 +218,7 @@ impl fmt::Debug for WindowsDeviceKeyMaterial {
             .debug_struct("WindowsDeviceKeyMaterial")
             .field("linux_adapter_address", &self.linux_adapter_address)
             .field("windows_device_address", &self.windows_device_address)
+            .field("registry_path", &self.registry_path)
             .field("material", &self.material)
             .finish()
     }
@@ -198,7 +261,7 @@ pub fn build_dry_run_report(
     scan_report: &ScanReport,
     request: &ApplyDryRunRequest,
 ) -> Result<ApplyDryRunReport> {
-    let sync_plan = plan::build_sync_plan(scan_report);
+    let sync_plan = build_apply_sync_plan(scan_report, request.manual_selection.as_ref())?;
     let content_preview = preview_from_scan_report(scan_report, &sync_plan)?;
     let backup_snapshot = build_backup_snapshot(&content_preview, &request.backup_root);
 
@@ -213,6 +276,10 @@ pub fn default_dry_run_request() -> ApplyDryRunRequest {
     ApplyDryRunRequest::new(Path::new(backup::store::DEFAULT_BACKUP_DIR).join("dry-run-preview"))
 }
 
+pub fn default_execute_request() -> ApplyExecuteRequest {
+    ApplyExecuteRequest::new(Path::new(backup::store::DEFAULT_BACKUP_DIR))
+}
+
 pub fn require_privileged_apply() -> Result<()> {
     require_privileged_apply_with(privileges::running_as_root())
 }
@@ -223,6 +290,75 @@ pub fn require_privileged_apply_with(running_as_root: bool) -> Result<()> {
     } else {
         Err(BluebondError::PrivilegeRequired { operation: "apply" })
     }
+}
+
+pub fn execute_apply(
+    scan_report: &ScanReport,
+    request: &ApplyExecuteRequest,
+) -> Result<ApplyExecuteReport> {
+    require_privileged_apply()?;
+
+    let sync_plan = build_apply_sync_plan(scan_report, request.manual_selection.as_ref())?;
+    let content_preview = preview_from_scan_report(scan_report, &sync_plan)?;
+    let backup_snapshot =
+        build_timestamped_backup_snapshot(&content_preview, &request.backup_base_dir);
+    let metadata = build_safety_metadata(&backup_snapshot, &content_preview, "apply");
+    let backup = write_backup_snapshot(&backup_snapshot, &metadata)?;
+
+    service::stop_bluetooth_service()?;
+    let write_result = write_bluez_info_records(&content_preview);
+    let start_result = service::start_bluetooth_service();
+
+    let bluez_writes = write_result?;
+
+    if let Err(error) = start_result {
+        return Err(BluebondError::BluetoothServiceStartFailed {
+            recovery: BLUETOOTH_SERVICE_RECOVERY,
+            detail: error.to_string(),
+        });
+    }
+
+    let verification = verify_post_apply_state(&scan_report.bluez_dir, &content_preview)?;
+
+    Ok(ApplyExecuteReport {
+        backup,
+        bluez_writes,
+        service: BluetoothServiceRestartReport {
+            stopped: true,
+            started: true,
+            recovery_instructions: None,
+        },
+        verification,
+    })
+}
+
+pub fn build_apply_sync_plan(
+    scan_report: &ScanReport,
+    manual_selection: Option<&ManualApplySelection>,
+) -> Result<SyncPlan> {
+    match manual_selection {
+        Some(selection) => build_manual_sync_plan(scan_report, selection),
+        None => Ok(plan::build_sync_plan(scan_report)),
+    }
+}
+
+pub fn build_manual_sync_plan(
+    scan_report: &ScanReport,
+    selection: &ManualApplySelection,
+) -> Result<SyncPlan> {
+    let (linux_adapter_address, display_name) = find_manual_linux_target(scan_report, selection)?;
+    validate_manual_windows_source(scan_report, linux_adapter_address, selection)?;
+
+    Ok(SyncPlan {
+        actions: vec![SyncPlanAction {
+            action_type: SyncPlanActionType::UpdateExistingBluezRecord,
+            linux_adapter_address,
+            linux_target_device_address: selection.target_device_address,
+            windows_source_device_address: selection.windows_source_device_address,
+            display_name,
+        }],
+        skipped: Vec::new(),
+    })
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -273,6 +409,247 @@ pub fn build_backup_snapshot(
     BackupSnapshot { root_dir, entries }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WrittenBackupSnapshot {
+    pub root_dir: PathBuf,
+    pub metadata_path: PathBuf,
+    pub files_written: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WrittenBluezInfoRecords {
+    pub files_written: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BluetoothServiceRestartReport {
+    pub stopped: bool,
+    pub started: bool,
+    pub recovery_instructions: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ApplyVerificationReport {
+    pub checked_devices: Vec<ApplyVerificationDevice>,
+    pub manual_reconnect_check: &'static str,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ApplyVerificationDevice {
+    pub linux_adapter_address: BluetoothAddress,
+    pub linux_device_address: BluetoothAddress,
+    pub target_info_path: PathBuf,
+    pub found: bool,
+    pub expected_long_term_key: bool,
+    pub has_long_term_key: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct ApplySafetyMetadata {
+    pub schema_version: u32,
+    pub bluebond_version: &'static str,
+    pub operation: String,
+    pub snapshot_id: String,
+    pub backup_root: PathBuf,
+    pub changes: Vec<ApplySafetyMetadataChange>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct ApplySafetyMetadataChange {
+    pub display_name: String,
+    pub linux_adapter_address: String,
+    pub linux_target_device_address: String,
+    pub windows_source_device_address: String,
+    pub windows_source_registry_path: Option<String>,
+    pub target_info_path: PathBuf,
+    pub backup_path: Option<PathBuf>,
+    pub content_changed: bool,
+}
+
+pub fn backup_snapshot_root(base_dir: &Path, snapshot_id: &str) -> PathBuf {
+    backup::store::snapshot_root(base_dir, snapshot_id)
+}
+
+pub fn build_timestamped_backup_snapshot(
+    preview: &BluezInfoContentPreview,
+    backup_base_dir: &Path,
+) -> BackupSnapshot {
+    let snapshot_id = backup::store::timestamped_snapshot_id();
+    build_backup_snapshot(preview, backup_snapshot_root(backup_base_dir, &snapshot_id))
+}
+
+pub fn build_safety_metadata(
+    snapshot: &BackupSnapshot,
+    preview: &BluezInfoContentPreview,
+    operation: impl Into<String>,
+) -> ApplySafetyMetadata {
+    let snapshot_id = snapshot
+        .root_dir
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    ApplySafetyMetadata {
+        schema_version: 1,
+        bluebond_version: env!("CARGO_PKG_VERSION"),
+        operation: operation.into(),
+        snapshot_id,
+        backup_root: snapshot.root_dir.clone(),
+        changes: preview
+            .changes
+            .iter()
+            .map(|change| ApplySafetyMetadataChange {
+                display_name: change.display_name.clone(),
+                linux_adapter_address: change.linux_adapter_address.to_string(),
+                linux_target_device_address: change.linux_target_device_address.to_string(),
+                windows_source_device_address: change.windows_source_device_address.to_string(),
+                windows_source_registry_path: change.windows_source_registry_path.clone(),
+                target_info_path: change.target_info_path.clone(),
+                backup_path: snapshot
+                    .entries
+                    .iter()
+                    .find(|entry| entry.source_path == change.target_info_path)
+                    .map(|entry| entry.backup_path.clone()),
+                content_changed: change.content_changed,
+            })
+            .collect(),
+    }
+}
+
+pub fn write_backup_snapshot(
+    snapshot: &BackupSnapshot,
+    metadata: &ApplySafetyMetadata,
+) -> Result<WrittenBackupSnapshot> {
+    let mut files_written = Vec::new();
+
+    for entry in &snapshot.entries {
+        backup::store::write_backup_file(&entry.backup_path, &entry.content)?;
+        files_written.push(entry.backup_path.clone());
+    }
+
+    let metadata_json =
+        serde_json::to_string_pretty(metadata).map_err(|source| BluebondError::Serialization {
+            context: "backup metadata",
+            source,
+        })?;
+    let metadata_path = backup::store::write_metadata(&snapshot.root_dir, &metadata_json)?;
+
+    Ok(WrittenBackupSnapshot {
+        root_dir: snapshot.root_dir.clone(),
+        metadata_path,
+        files_written,
+    })
+}
+
+pub fn write_bluez_info_records(
+    preview: &BluezInfoContentPreview,
+) -> Result<WrittenBluezInfoRecords> {
+    let mut files_written = Vec::new();
+
+    for change in &preview.changes {
+        if !change.content_changed {
+            continue;
+        }
+
+        store::write_device_info_atomic(&change.target_info_path, &change.next_info_content)?;
+        files_written.push(change.target_info_path.clone());
+    }
+
+    Ok(WrittenBluezInfoRecords { files_written })
+}
+
+pub fn restart_bluetooth_service() -> Result<BluetoothServiceRestartReport> {
+    service::stop_bluetooth_service()?;
+
+    match service::start_bluetooth_service() {
+        Ok(()) => Ok(BluetoothServiceRestartReport {
+            stopped: true,
+            started: true,
+            recovery_instructions: None,
+        }),
+        Err(error) => Err(BluebondError::BluetoothServiceStartFailed {
+            recovery: BLUETOOTH_SERVICE_RECOVERY,
+            detail: error.to_string(),
+        }),
+    }
+}
+
+pub const BLUETOOTH_SERVICE_RECOVERY: &str =
+    "run `sudo systemctl start bluetooth.service` and restore from the BlueBond backup if needed";
+
+pub fn bluetooth_service_report_from_outcomes(
+    stop_ok: bool,
+    start_ok: bool,
+) -> Result<BluetoothServiceRestartReport> {
+    if !stop_ok {
+        return Err(BluebondError::CommandFailed {
+            program: "systemctl".to_string(),
+            status: Some(1),
+            stderr: "failed to stop bluetooth.service".to_string(),
+        });
+    }
+
+    if !start_ok {
+        return Err(BluebondError::BluetoothServiceStartFailed {
+            recovery: BLUETOOTH_SERVICE_RECOVERY,
+            detail: "failed to start bluetooth.service".to_string(),
+        });
+    }
+
+    Ok(BluetoothServiceRestartReport {
+        stopped: true,
+        started: true,
+        recovery_instructions: None,
+    })
+}
+
+pub fn verify_post_apply_state(
+    bluez_dir: &Path,
+    preview: &BluezInfoContentPreview,
+) -> Result<ApplyVerificationReport> {
+    let inventory = store::read_inventory(bluez_dir)?;
+    let checked_devices = preview
+        .changes
+        .iter()
+        .map(|change| {
+            let device = inventory
+                .iter()
+                .find(|adapter| adapter.address == change.linux_adapter_address)
+                .and_then(|adapter| {
+                    adapter
+                        .devices
+                        .iter()
+                        .find(|device| device.address == change.linux_target_device_address)
+                });
+            let expected_long_term_key = change.next_info_content.contains("[LongTermKey]");
+
+            ApplyVerificationDevice {
+                linux_adapter_address: change.linux_adapter_address,
+                linux_device_address: change.linux_target_device_address,
+                target_info_path: change.target_info_path.clone(),
+                found: device.is_some(),
+                expected_long_term_key,
+                has_long_term_key: device.is_some_and(|device| device.has_long_term_key),
+            }
+        })
+        .collect();
+
+    Ok(ApplyVerificationReport {
+        checked_devices,
+        manual_reconnect_check:
+            "reconnect the Bluetooth device and confirm it pairs without re-pairing",
+    })
+}
+
+impl ApplyVerificationReport {
+    pub fn all_expected_records_visible(&self) -> bool {
+        self.checked_devices.iter().all(|device| {
+            device.found && (device.has_long_term_key || !device.expected_long_term_key)
+        })
+    }
+}
+
 fn preview_action(
     action: &SyncPlanAction,
     request: &BluezInfoPreviewRequest,
@@ -293,6 +670,8 @@ fn preview_action(
         linux_adapter_address: action.linux_adapter_address,
         linux_target_device_address: action.linux_target_device_address,
         windows_source_device_address: action.windows_source_device_address,
+        windows_source_registry_path: find_windows_key_material_entry(action, request)
+            .and_then(|material| material.registry_path.clone()),
         target_info_path: target_info_path(
             &request.bluez_dir,
             action.linux_adapter_address,
@@ -302,6 +681,63 @@ fn preview_action(
         next_info_content,
         content_changed,
     })
+}
+
+fn find_manual_linux_target(
+    scan_report: &ScanReport,
+    selection: &ManualApplySelection,
+) -> Result<(BluetoothAddress, String)> {
+    let matches = scan_report
+        .adapters
+        .iter()
+        .filter(|adapter| {
+            selection
+                .adapter_address
+                .is_none_or(|selected| selected == adapter.address)
+        })
+        .filter_map(|adapter| {
+            adapter
+                .devices
+                .iter()
+                .find(|device| device.address == selection.target_device_address)
+                .map(|device| (adapter.address, device.display_name().to_string()))
+        })
+        .collect::<Vec<_>>();
+
+    match matches.as_slice() {
+        [] => Err(BluebondError::MissingPreviewInput {
+            context: "manual Linux target device",
+        }),
+        [single] => Ok(single.clone()),
+        _ => Err(BluebondError::AmbiguousPreviewInput {
+            context: "manual Linux target device adapter",
+        }),
+    }
+}
+
+fn validate_manual_windows_source(
+    scan_report: &ScanReport,
+    linux_adapter_address: BluetoothAddress,
+    selection: &ManualApplySelection,
+) -> Result<()> {
+    let source = scan_report
+        .windows_bluetooth_keys
+        .iter()
+        .flat_map(|inspection| inspection.adapters.iter())
+        .filter(|adapter| adapter.adapter_address == linux_adapter_address)
+        .flat_map(|adapter| adapter.devices.iter())
+        .find(|device| device.device_address == selection.windows_source_device_address)
+        .ok_or(BluebondError::MissingPreviewInput {
+            context: "manual Windows source device",
+        })?;
+
+    if source.has_key_material {
+        Ok(())
+    } else {
+        Err(BluebondError::MissingPreviewInput {
+            context: "manual Windows source key material",
+        })
+    }
 }
 
 fn collect_existing_infos(
@@ -342,6 +778,7 @@ fn collect_windows_key_materials(
             Ok(WindowsDeviceKeyMaterial {
                 linux_adapter_address: action.linux_adapter_address,
                 windows_device_address: action.windows_source_device_address,
+                registry_path: Some(source.registry_path),
                 material,
             })
         })
@@ -407,17 +844,21 @@ fn find_windows_key_material<'a>(
     action: &SyncPlanAction,
     request: &'a BluezInfoPreviewRequest,
 ) -> Result<&'a WindowsBluetoothKeyMaterial> {
-    request
-        .windows_key_materials
-        .iter()
-        .find(|material| {
-            material.linux_adapter_address == action.linux_adapter_address
-                && material.windows_device_address == action.windows_source_device_address
-        })
+    find_windows_key_material_entry(action, request)
         .map(|material| &material.material)
         .ok_or(BluebondError::InvalidRegistryValue {
             context: "Windows Bluetooth key material",
         })
+}
+
+fn find_windows_key_material_entry<'a>(
+    action: &SyncPlanAction,
+    request: &'a BluezInfoPreviewRequest,
+) -> Option<&'a WindowsDeviceKeyMaterial> {
+    request.windows_key_materials.iter().find(|material| {
+        material.linux_adapter_address == action.linux_adapter_address
+            && material.windows_device_address == action.windows_source_device_address
+    })
 }
 
 fn find_existing_info<'a>(

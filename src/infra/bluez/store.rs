@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::domain::{BluetoothAdapter, BluetoothAddress, BluetoothDevice};
@@ -66,6 +68,42 @@ pub fn read_device_info_content(
             source,
         }),
     }
+}
+
+pub fn write_device_info_atomic(info_path: &Path, content: &str) -> Result<()> {
+    let Some(parent) = info_path.parent() else {
+        return Err(BluebondError::Io {
+            context: "resolving BlueZ info parent directory",
+            source: std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "BlueZ info path has no parent directory",
+            ),
+        });
+    };
+
+    fs::create_dir_all(parent).map_err(|source| BluebondError::Io {
+        context: "creating BlueZ device directory",
+        source,
+    })?;
+
+    let temp_path = parent.join("info.bluebond.tmp");
+    fs::write(&temp_path, content).map_err(|source| BluebondError::Io {
+        context: "writing temporary BlueZ info file",
+        source,
+    })?;
+
+    #[cfg(unix)]
+    fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600)).map_err(|source| {
+        BluebondError::Io {
+            context: "setting BlueZ info permissions",
+            source,
+        }
+    })?;
+
+    fs::rename(&temp_path, info_path).map_err(|source| BluebondError::Io {
+        context: "renaming BlueZ info file",
+        source,
+    })
 }
 
 fn read_adapter_devices(adapter_dir: &Path) -> Result<Vec<BluetoothDevice>> {

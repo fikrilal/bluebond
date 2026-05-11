@@ -13,8 +13,24 @@ pub enum BluebondError {
     #[error("missing apply preview input: {context}")]
     MissingPreviewInput { context: &'static str },
 
+    #[error("ambiguous apply preview input: {context}")]
+    AmbiguousPreviewInput { context: &'static str },
+
     #[error("privileged execution required for {operation}")]
     PrivilegeRequired { operation: &'static str },
+
+    #[error("failed to serialize {context}")]
+    Serialization {
+        context: &'static str,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("failed to start bluetooth.service after apply; {recovery}; detail: {detail}")]
+    BluetoothServiceStartFailed {
+        recovery: &'static str,
+        detail: String,
+    },
 
     #[error("command failed: {program}")]
     CommandFailed {

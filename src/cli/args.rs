@@ -19,6 +19,10 @@ pub enum Command {
         #[arg(long)]
         dry_run: bool,
 
+        /// Execute the planned BlueZ changes. Requires root.
+        #[arg(long)]
+        execute: bool,
+
         /// Override the BlueZ store directory.
         #[arg(long, value_name = "PATH")]
         bluez_dir: Option<PathBuf>,
@@ -26,6 +30,18 @@ pub enum Command {
         /// Override the offline Windows root directory.
         #[arg(long, value_name = "PATH")]
         windows_root: Option<PathBuf>,
+
+        /// Scope manual selection to a specific Linux adapter address.
+        #[arg(long, value_name = "MAC")]
+        adapter: Option<String>,
+
+        /// Explicit Linux target device address for ambiguous matches.
+        #[arg(long, value_name = "MAC")]
+        target_device: Option<String>,
+
+        /// Explicit Windows source device address for ambiguous matches.
+        #[arg(long, value_name = "MAC")]
+        windows_source_device: Option<String>,
     },
 
     /// Check host tools and paths needed by BlueBond.

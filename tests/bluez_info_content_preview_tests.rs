@@ -129,6 +129,10 @@ fn base_request() -> BluezInfoPreviewRequest {
         WindowsDeviceKeyMaterial {
             linux_adapter_address: adapter_address(),
             windows_device_address: windows_device_address(),
+            registry_path: Some(
+                r"ControlSet001\Services\BTHPORT\Parameters\Keys\f889d28392c0\c6c0fdf1fb80"
+                    .to_string(),
+            ),
             material: windows_key_material(),
         },
     ])

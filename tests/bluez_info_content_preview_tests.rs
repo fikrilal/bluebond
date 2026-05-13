@@ -53,6 +53,43 @@ fn previews_new_bluez_info_content_for_create_action() {
 }
 
 #[test]
+fn create_action_can_use_existing_bluez_template_content() {
+    let plan = SyncPlan {
+        actions: vec![SyncPlanAction {
+            action_type: SyncPlanActionType::CreateBluezRecord,
+            linux_adapter_address: adapter_address(),
+            linux_target_device_address: "C6:C0:FF:F1:FB:80".parse().unwrap(),
+            bluez_template_device_address: Some(linux_device_address()),
+            windows_source_device_address: windows_device_address(),
+            display_name: "Legion M600 Mouse".to_string(),
+        }],
+        skipped: Vec::new(),
+    };
+    let request = base_request().with_existing_infos(vec![ExistingBluezInfoContent {
+        linux_adapter_address: adapter_address(),
+        linux_device_address: linux_device_address(),
+        content: "[General]\nName=Legion M600 Mouse\nTrusted=true\n\n[LongTermKey]\nKey=OLD\n"
+            .to_string(),
+    }]);
+
+    let preview = apply::preview_bluez_info_content(&plan, &request).unwrap();
+
+    assert_eq!(
+        preview.changes[0].target_info_path,
+        PathBuf::from("tests/fixtures/bluez/F8:89:D2:83:92:C0/C6:C0:FF:F1:FB:80/info")
+    );
+    assert_eq!(preview.changes[0].existing_info_content, None);
+    assert!(preview.changes[0].content_changed);
+    assert!(preview.changes[0]
+        .next_info_content
+        .contains("Name=Legion M600 Mouse"));
+    assert!(preview.changes[0]
+        .next_info_content
+        .contains("Trusted=true"));
+    assert!(!preview.changes[0].next_info_content.contains("Key=OLD"));
+}
+
+#[test]
 fn reports_unchanged_content_when_preview_matches_existing_info() {
     let plan = plan_with_action(SyncPlanActionType::UpdateExistingBluezRecord);
     let rendered_content = rendered_key_content();
@@ -155,6 +192,7 @@ fn plan_with_action(action_type: SyncPlanActionType) -> SyncPlan {
             action_type,
             linux_adapter_address: adapter_address(),
             linux_target_device_address: linux_device_address(),
+            bluez_template_device_address: None,
             windows_source_device_address: windows_device_address(),
             display_name: "Legion M600 Mouse".to_string(),
         }],

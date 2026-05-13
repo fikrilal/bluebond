@@ -60,16 +60,16 @@ Prerequisites:
 Download and verify the Linux x86_64 archive:
 
 ```bash
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
 ```
 
 Extract and install:
 
 ```bash
-tar -xzf bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-sudo install -m 0755 bluebond-0.1.1-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
+tar -xzf bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+sudo install -m 0755 bluebond-0.1.2-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
 bluebond --help
 ```
 
@@ -152,6 +152,16 @@ sudo bluebond apply --execute \
   --windows-root /mnt/windows \
   --target-device AA:BB:CC:DD:EE:FF \
   --windows-source-device AA:BB:CC:DD:EE:00
+```
+
+Some devices reconnect only when BlueZ has a record at the Windows-current address. For that case, keep `--target-device` as the existing Linux device address, set `--windows-source-device` to the Windows-current address, and add:
+
+```bash
+sudo bluebond apply --execute \
+  --windows-root /mnt/windows \
+  --target-device AA:BB:CC:DD:EE:FF \
+  --windows-source-device AA:BB:CC:DD:EE:00 \
+  --target-windows-source-address
 ```
 
 After apply, reconnect the device from Bluetooth settings or `bluetoothctl`. BlueBond verifies that the expected BlueZ record exists and contains key material, but the final radio reconnect is still a manual check in V1.

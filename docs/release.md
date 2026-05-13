@@ -7,11 +7,11 @@ BlueBond uses plain Cargo release builds and GitHub Releases for early public di
 Public users should install from GitHub Releases rather than building from source:
 
 ```bash
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-tar -xzf bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-sudo install -m 0755 bluebond-0.1.1-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+sudo install -m 0755 bluebond-0.1.2-x86_64-unknown-linux-gnu/bluebond /usr/local/bin/bluebond
 bluebond --help
 ```
 
@@ -54,7 +54,7 @@ v<version>
 For example:
 
 ```text
-v0.1.1
+v0.1.2
 ```
 
 The package script fails in GitHub Actions if the pushed tag does not match the Cargo version.
@@ -77,15 +77,15 @@ Before tagging:
 6. Commit the release prep:
 
 ```bash
-git commit -m "chore(release): prepare v0.1.1"
+git commit -m "chore(release): prepare v0.1.2"
 ```
 
 7. Merge the release commit to `main`.
 8. Tag `main`:
 
 ```bash
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "v0.1.2"
+git push origin v0.1.2
 ```
 
 ## GitHub Release Workflow
@@ -117,12 +117,12 @@ After GitHub publishes the release, validate the real user path:
 ```bash
 tmpdir="$(mktemp -d)"
 cd "$tmpdir"
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.1/bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-tar -xzf bluebond-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-./bluebond-0.1.1-x86_64-unknown-linux-gnu/bluebond --version
-./bluebond-0.1.1-x86_64-unknown-linux-gnu/bluebond --help
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/fikrilal/bluebond/releases/download/v0.1.2/bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf bluebond-0.1.2-x86_64-unknown-linux-gnu.tar.gz
+./bluebond-0.1.2-x86_64-unknown-linux-gnu/bluebond --version
+./bluebond-0.1.2-x86_64-unknown-linux-gnu/bluebond --help
 ```
 
 Do not announce the release until this passes.

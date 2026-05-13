@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use bluebond::app::apply::{self, ManualApplySelection};
+use bluebond::app::apply::{self, ManualApplySelection, ManualApplyTargetMode};
 use bluebond::app::scan::{
     ScanReport, WindowsBluetoothAdapterKey, WindowsBluetoothDeviceKey,
     WindowsBluetoothKeyInspection, WindowsBluetoothKeyInspectionStatus,
@@ -86,6 +86,37 @@ fn manual_selection_uses_adapter_to_disambiguate_duplicate_linux_targets() {
         plan.actions[0].linux_adapter_address.to_string(),
         "F8:89:D2:83:92:C0"
     );
+}
+
+#[test]
+fn manual_selection_can_target_windows_source_address_experimentally() {
+    let report = scan_report();
+    let selection = ManualApplySelection::from_raw_with_target_mode(
+        None,
+        "C6:C0:FE:F1:FB:80",
+        "C6:C0:FD:F1:FB:80",
+        ManualApplyTargetMode::WindowsSource,
+    )
+    .unwrap();
+
+    let plan = apply::build_manual_sync_plan(&report, &selection).unwrap();
+
+    assert_eq!(
+        plan.actions[0].action_type,
+        SyncPlanActionType::CreateBluezRecord
+    );
+    assert_eq!(
+        plan.actions[0].linux_target_device_address.to_string(),
+        "C6:C0:FD:F1:FB:80"
+    );
+    assert_eq!(
+        plan.actions[0]
+            .bluez_template_device_address
+            .unwrap()
+            .to_string(),
+        "C6:C0:FE:F1:FB:80"
+    );
+    assert_eq!(plan.actions[0].display_name, "Legion M600 Mouse");
 }
 
 fn scan_report() -> ScanReport {

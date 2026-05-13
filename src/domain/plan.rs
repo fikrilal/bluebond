@@ -32,6 +32,7 @@ pub struct SyncPlanAction {
     pub action_type: SyncPlanActionType,
     pub linux_adapter_address: BluetoothAddress,
     pub linux_target_device_address: BluetoothAddress,
+    pub bluez_template_device_address: Option<BluetoothAddress>,
     pub windows_source_device_address: BluetoothAddress,
     pub display_name: String,
 }
@@ -54,6 +55,7 @@ impl SyncPlanAction {
             action_type,
             linux_adapter_address,
             linux_target_device_address: device.linux_address,
+            bluez_template_device_address: None,
             windows_source_device_address: device.windows_address?,
             display_name: device.display_name.clone(),
         })

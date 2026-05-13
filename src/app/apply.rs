@@ -145,6 +145,13 @@ pub struct ManualApplySelection {
     pub adapter_address: Option<BluetoothAddress>,
     pub target_device_address: BluetoothAddress,
     pub windows_source_device_address: BluetoothAddress,
+    pub target_mode: ManualApplyTargetMode,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ManualApplyTargetMode {
+    LinuxTarget,
+    WindowsSource,
 }
 
 impl ManualApplySelection {
@@ -153,12 +160,27 @@ impl ManualApplySelection {
         target_device_address: &str,
         windows_source_device_address: &str,
     ) -> Result<Self> {
+        Self::from_raw_with_target_mode(
+            adapter_address,
+            target_device_address,
+            windows_source_device_address,
+            ManualApplyTargetMode::LinuxTarget,
+        )
+    }
+
+    pub fn from_raw_with_target_mode(
+        adapter_address: Option<&str>,
+        target_device_address: &str,
+        windows_source_device_address: &str,
+        target_mode: ManualApplyTargetMode,
+    ) -> Result<Self> {
         Ok(Self {
             adapter_address: adapter_address
                 .map(str::parse::<BluetoothAddress>)
                 .transpose()?,
             target_device_address: target_device_address.parse()?,
             windows_source_device_address: windows_source_device_address.parse()?,
+            target_mode,
         })
     }
 }
@@ -351,9 +373,19 @@ pub fn build_manual_sync_plan(
 
     Ok(SyncPlan {
         actions: vec![SyncPlanAction {
-            action_type: SyncPlanActionType::UpdateExistingBluezRecord,
+            action_type: match selection.target_mode {
+                ManualApplyTargetMode::LinuxTarget => SyncPlanActionType::UpdateExistingBluezRecord,
+                ManualApplyTargetMode::WindowsSource => SyncPlanActionType::CreateBluezRecord,
+            },
             linux_adapter_address,
-            linux_target_device_address: selection.target_device_address,
+            linux_target_device_address: match selection.target_mode {
+                ManualApplyTargetMode::LinuxTarget => selection.target_device_address,
+                ManualApplyTargetMode::WindowsSource => selection.windows_source_device_address,
+            },
+            bluez_template_device_address: match selection.target_mode {
+                ManualApplyTargetMode::LinuxTarget => None,
+                ManualApplyTargetMode::WindowsSource => Some(selection.target_device_address),
+            },
             windows_source_device_address: selection.windows_source_device_address,
             display_name,
         }],
@@ -656,9 +688,17 @@ fn preview_action(
 ) -> Result<BluezInfoContentChange> {
     let material = find_windows_key_material(action, request)?;
     let key_sections = BluezInfoKeySections::from_windows_key_material(material)?;
-    let existing_info_content = find_existing_info(action, request).cloned();
+    let existing_info_content =
+        find_existing_info_for_device(action, request, action.linux_target_device_address).cloned();
+    let base_info_content = existing_info_content.clone().or_else(|| {
+        action
+            .bluez_template_device_address
+            .and_then(|device_address| {
+                find_existing_info_for_device(action, request, device_address).cloned()
+            })
+    });
     let next_info_content = bluez_info::merge_key_sections(
-        existing_info_content.as_deref().unwrap_or_default(),
+        base_info_content.as_deref().unwrap_or_default(),
         &key_sections,
     );
     let content_changed = existing_info_content
@@ -744,17 +784,32 @@ fn collect_existing_infos(
     scan_report: &ScanReport,
     plan: &SyncPlan,
 ) -> Result<Vec<ExistingBluezInfoContent>> {
-    plan.actions
+    let targets = plan
+        .actions
         .iter()
-        .filter_map(|action| {
+        .flat_map(|action| {
+            [
+                action.linux_target_device_address,
+                action
+                    .bluez_template_device_address
+                    .unwrap_or(action.linux_target_device_address),
+            ]
+            .into_iter()
+            .map(move |device_address| (action.linux_adapter_address, device_address))
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+
+    targets
+        .into_iter()
+        .filter_map(|(adapter_address, device_address)| {
             match store::read_device_info_content(
                 &scan_report.bluez_dir,
-                action.linux_adapter_address,
-                action.linux_target_device_address,
+                adapter_address,
+                device_address,
             ) {
                 Ok(Some(content)) => Some(Ok(ExistingBluezInfoContent {
-                    linux_adapter_address: action.linux_adapter_address,
-                    linux_device_address: action.linux_target_device_address,
+                    linux_adapter_address: adapter_address,
+                    linux_device_address: device_address,
                     content,
                 })),
                 Ok(None) => None,
@@ -861,18 +916,16 @@ fn find_windows_key_material_entry<'a>(
     })
 }
 
-fn find_existing_info<'a>(
+fn find_existing_info_for_device<'a>(
     action: &SyncPlanAction,
     request: &'a BluezInfoPreviewRequest,
+    device_address: BluetoothAddress,
 ) -> Option<&'a String> {
-    request
-        .existing_infos
-        .iter()
-        .find(|info| {
-            info.linux_adapter_address == action.linux_adapter_address
-                && info.linux_device_address == action.linux_target_device_address
-        })
-        .map(|info| &info.content)
+    request.existing_infos.iter().find_map(|info| {
+        (info.linux_adapter_address == action.linux_adapter_address
+            && info.linux_device_address == device_address)
+            .then_some(&info.content)
+    })
 }
 
 fn target_info_path(

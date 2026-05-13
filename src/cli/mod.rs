@@ -20,19 +20,24 @@ pub fn run() -> ExitCode {
             adapter,
             target_device,
             windows_source_device,
+            target_windows_source_address,
         } => {
             if dry_run == execute {
                 eprintln!("bluebond apply requires exactly one of --dry-run or --execute");
                 return ExitCode::from(2);
             }
-            let manual_selection =
-                match build_manual_selection(adapter, target_device, windows_source_device) {
-                    Ok(selection) => selection,
-                    Err(message) => {
-                        eprintln!("{message}");
-                        return ExitCode::from(2);
-                    }
-                };
+            let manual_selection = match build_manual_selection(
+                adapter,
+                target_device,
+                windows_source_device,
+                target_windows_source_address,
+            ) {
+                Ok(selection) => selection,
+                Err(message) => {
+                    eprintln!("{message}");
+                    return ExitCode::from(2);
+                }
+            };
 
             let scan_request = build_scan_request(bluez_dir, windows_root);
 
@@ -173,20 +178,28 @@ fn build_manual_selection(
     adapter: Option<String>,
     target_device: Option<String>,
     windows_source_device: Option<String>,
+    target_windows_source_address: bool,
 ) -> std::result::Result<Option<app::apply::ManualApplySelection>, String> {
+    let target_mode = if target_windows_source_address {
+        app::apply::ManualApplyTargetMode::WindowsSource
+    } else {
+        app::apply::ManualApplyTargetMode::LinuxTarget
+    };
+
     match (target_device.as_deref(), windows_source_device.as_deref()) {
         (None, None) => {
-            if adapter.is_some() {
-                Err("bluebond apply --adapter requires --target-device and --windows-source-device"
+            if adapter.is_some() || target_windows_source_address {
+                Err("bluebond apply manual selection requires --target-device and --windows-source-device"
                     .to_string())
             } else {
                 Ok(None)
             }
         }
-        (Some(target_device), Some(windows_source_device)) => app::apply::ManualApplySelection::from_raw(
+        (Some(target_device), Some(windows_source_device)) => app::apply::ManualApplySelection::from_raw_with_target_mode(
             adapter.as_deref(),
             target_device,
             windows_source_device,
+            target_mode,
         )
         .map(Some)
         .map_err(|error| error.to_string()),

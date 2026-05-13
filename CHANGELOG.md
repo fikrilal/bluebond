@@ -6,9 +6,14 @@ The format follows a simple human-maintained changelog. BlueBond is pre-1.0, so 
 
 ## Unreleased
 
+- No unreleased changes yet.
+
+## v0.1.2 - 2026-05-13
+
 ### Fixed
 
 - Remove stale BlueZ LE compatibility key sections when syncing Windows key material.
+- Add an experimental manual apply mode that writes the BlueZ target record at the Windows source device address while using the existing Linux record as a metadata template. This fixes devices that reconnect only under the Windows-current Bluetooth address after switching back to Linux.
 
 ## v0.1.1 - 2026-05-11
 

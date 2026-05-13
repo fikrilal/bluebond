@@ -42,6 +42,10 @@ pub enum Command {
         /// Explicit Windows source device address for ambiguous matches.
         #[arg(long, value_name = "MAC")]
         windows_source_device: Option<String>,
+
+        /// Experimental: write the BlueZ target record at the Windows source device address.
+        #[arg(long)]
+        target_windows_source_address: bool,
     },
 
     /// Check host tools and paths needed by BlueBond.

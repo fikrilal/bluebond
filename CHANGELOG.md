@@ -6,7 +6,9 @@ The format follows a simple human-maintained changelog. BlueBond is pre-1.0, so 
 
 ## Unreleased
 
-- No unreleased changes yet.
+### Fixed
+
+- Remove stale BlueZ LE compatibility key sections when syncing Windows key material.
 
 ## v0.1.1 - 2026-05-11
 

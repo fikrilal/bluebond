@@ -1,6 +1,13 @@
 use crate::convert::windows_to_bluez::BluezInfoKeySections;
 
-const MANAGED_KEY_SECTIONS: &[&str] = &["IdentityResolvingKey", "LocalSignatureKey", "LongTermKey"];
+const MANAGED_KEY_SECTIONS: &[&str] = &[
+    "IdentityResolvingKey",
+    "LocalSignatureKey",
+    "LongTermKey",
+    "PeripheralLongTermKey",
+    "RemoteSignatureKey",
+    "SlaveLongTermKey",
+];
 
 pub fn merge_key_sections(existing_info: &str, key_sections: &BluezInfoKeySections) -> String {
     let preserved = preserve_unmanaged_sections(existing_info);
